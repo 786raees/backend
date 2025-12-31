@@ -1,0 +1,22 @@
+services:
+  - type: web
+    name: glc-dashboard-api
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    envVars:
+      # Google Sheets Configuration (required)
+      - key: GOOGLE_SPREADSHEET_ID
+        sync: false
+      - key: GOOGLE_SERVICE_ACCOUNT_JSON
+        sync: false
+      # CORS Configuration
+      - key: CORS_ORIGINS
+        value: "*"
+      # Application Settings
+      - key: DEBUG
+        value: "false"
+      - key: USE_MOCK_DATA_FALLBACK
+        value: "true"

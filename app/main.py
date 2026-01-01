@@ -3,7 +3,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
-from app.api.v1.routes import health, schedule
+from app.api.v1.routes import health, schedule, sales
 
 # Create FastAPI application
 app = FastAPI(
@@ -27,6 +27,7 @@ app.add_middleware(
 # Include routers
 app.include_router(health.router, tags=["Health"])
 app.include_router(schedule.router, prefix="/api/v1", tags=["Schedule"])
+app.include_router(sales.router, prefix="/api/v1", tags=["Sales"])
 
 
 @app.get("/")

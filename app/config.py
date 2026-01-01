@@ -29,6 +29,9 @@ class Settings(BaseSettings):
     google_spreadsheet_id: str = ""
     google_service_account_json: SecretStr = SecretStr("")
 
+    # Sales Tracker Spreadsheet (separate from turf supply)
+    sales_spreadsheet_id: str = ""
+
     # Cache Configuration
     graph_cache_ttl_seconds: int = 300  # 5 minutes
 

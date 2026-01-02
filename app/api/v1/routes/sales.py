@@ -25,8 +25,8 @@ class AppointmentUpdateRequest(BaseModel):
     """Request body for updating an appointment field."""
     week_tab: str = Field(..., description="Week tab name, e.g., 'Jan-05'")
     row_number: int = Field(..., ge=1, description="Row number in sheet (1-indexed)")
-    column: str = Field(..., pattern="^[FGH]$", description="Column letter (F, G, or H only)")
-    value: str = Field(..., description="Value to set (e.g., 'Yes', '', or reason text)")
+    column: str = Field(..., pattern="^[FGHJ]$", description="Column letter (F, G, H, or J only)")
+    value: str = Field(..., description="Value to set (e.g., 'Yes', '', reason text, or price)")
 
 
 class AppointmentUpdateResponse(BaseModel):
@@ -77,8 +77,11 @@ async def update_appointment(request: AppointmentUpdateRequest):
     """
     Update a single field in an appointment row (Staff Dashboard writes back).
 
-    Only columns F (Attended), G (Sold), and H (Reason) can be updated.
-    Values should be "Yes", "", or reason text for column H.
+    Editable columns:
+    - F (Attended): "Yes" or ""
+    - G (Sold): "Yes" or ""
+    - H (Reason): Reason text
+    - J (Sell Price): Price value (e.g., "50000" or "$50,000")
     """
     result = await sales_service.update_appointment_field(
         week_tab=request.week_tab,

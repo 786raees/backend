@@ -53,21 +53,26 @@ class SalesService:
         "appointment_attended": 5,   # F
         "job_sold": 6,       # G
         "reason": 7,         # H
-        "conversion": 8      # I
+        "conversion": 8,     # I
+        "sell_price": 9      # J - Sold Price ex GST
     }
 
     # Editable columns (letter format)
-    EDITABLE_COLUMNS = ["F", "G", "H"]
+    EDITABLE_COLUMNS = ["F", "G", "H", "J"]
 
     def __init__(self):
         self._client: Optional[GoogleSheetsClient] = None
+        self._service = None
         self._spreadsheet_id = settings.sales_spreadsheet_id if hasattr(settings, 'sales_spreadsheet_id') else None
 
-    def _get_client(self) -> GoogleSheetsClient:
-        """Lazy initialization of sheets client."""
-        if self._client is None:
-            self._client = GoogleSheetsClient()
-        return self._client
+    def _get_service(self):
+        """Lazy initialization of sheets service."""
+        if self._service is None:
+            if self._client is None:
+                self._client = GoogleSheetsClient()
+            # Call _ensure_service() to initialize the service
+            self._service = self._client._ensure_service()
+        return self._service
 
     def _get_spreadsheet_id(self) -> str:
         """Get the sales spreadsheet ID."""
@@ -121,6 +126,22 @@ class SalesService:
             return value.strip().lower() == "yes"
         return False
 
+    def parse_currency(self, value: Any) -> float:
+        """Parse currency string to float (e.g., '$50,000' -> 50000.0)."""
+        if value is None:
+            return 0.0
+        if isinstance(value, (int, float)):
+            return float(value)
+        if isinstance(value, str):
+            # Remove currency symbols, commas, and whitespace
+            cleaned = value.strip().replace('$', '').replace(',', '').replace(' ', '')
+            if cleaned:
+                try:
+                    return float(cleaned)
+                except ValueError:
+                    return 0.0
+        return 0.0
+
     def format_display_date(self, target_date: date) -> str:
         """Format date as 'Thu 2nd Jan'."""
         days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
@@ -155,7 +176,8 @@ class SalesService:
             "appointment_confirmed": self.parse_boolean(safe_get(self.COLUMNS["appointment_confirmed"])),
             "appointment_attended": self.parse_boolean(safe_get(self.COLUMNS["appointment_attended"])),
             "job_sold": self.parse_boolean(safe_get(self.COLUMNS["job_sold"])),
-            "reason": safe_get(self.COLUMNS["reason"])
+            "reason": safe_get(self.COLUMNS["reason"]),
+            "sell_price": self.parse_currency(safe_get(self.COLUMNS["sell_price"]))
         }
 
     async def get_daily_schedule(self, target_date: date) -> Dict:
@@ -177,17 +199,25 @@ class SalesService:
             }
 
         try:
-            client = self._get_client()
+            service = self._get_service()
             spreadsheet_id = self._get_spreadsheet_id()
+
+            # Check if the week tab exists
+            available_weeks = await self.get_available_weeks()
+            if week_tab not in available_weeks:
+                return {
+                    "success": False,
+                    "error": f"Week '{week_tab}' not found. Available weeks: {', '.join(available_weeks[:5])}..."
+                }
 
             # Read the entire day's data (all reps)
             # We need rows from the day header to cover all 3 reps
             day_start_row = self.DAY_HEADER_ROWS[day_name]
             day_end_row = day_start_row + 28  # Covers all 3 reps with buffer
 
-            range_notation = f"'{week_tab}'!A{day_start_row}:I{day_end_row}"
+            range_notation = f"'{week_tab}'!A{day_start_row}:J{day_end_row}"
 
-            result = client._service.spreadsheets().values().get(
+            result = service.spreadsheets().values().get(
                 spreadsheetId=spreadsheet_id,
                 range=range_notation
             ).execute()
@@ -225,7 +255,8 @@ class SalesService:
                             "appointment_confirmed": False,
                             "appointment_attended": False,
                             "job_sold": False,
-                            "reason": ""
+                            "reason": "",
+                            "sell_price": 0.0
                         }
 
                     rep_appointments.append(appointment)
@@ -285,14 +316,14 @@ class SalesService:
             }
 
         try:
-            client = self._get_client()
+            service = self._get_service()
             spreadsheet_id = self._get_spreadsheet_id()
 
             # Build cell reference
             cell_ref = f"'{week_tab}'!{column.upper()}{row_number}"
 
             # Update the cell
-            client._service.spreadsheets().values().update(
+            service.spreadsheets().values().update(
                 spreadsheetId=spreadsheet_id,
                 range=cell_ref,
                 valueInputOption="USER_ENTERED",
@@ -321,13 +352,13 @@ class SalesService:
     async def get_weekly_stats(self, week_tab: str) -> Dict:
         """Aggregate statistics for an entire week."""
         try:
-            client = self._get_client()
+            service = self._get_service()
             spreadsheet_id = self._get_spreadsheet_id()
 
             # Read entire week's data (rows 1-150 covers all days)
-            range_notation = f"'{week_tab}'!A1:I150"
+            range_notation = f"'{week_tab}'!A1:J150"
 
-            result = client._service.spreadsheets().values().get(
+            result = service.spreadsheets().values().get(
                 spreadsheetId=spreadsheet_id,
                 range=range_notation
             ).execute()
@@ -339,7 +370,8 @@ class SalesService:
                 "appointments_set": 0,
                 "appointments_confirmed": 0,
                 "in_homes_attended": 0,
-                "jobs_sold": 0
+                "jobs_sold": 0,
+                "weekly_sales_total": 0.0
             }
 
             by_rep = {rep: {
@@ -372,6 +404,7 @@ class SalesService:
                             is_attended = self.parse_boolean(safe_get(self.COLUMNS["appointment_attended"]))
                             is_sold = self.parse_boolean(safe_get(self.COLUMNS["job_sold"]))
                             lead_source = safe_get(self.COLUMNS["lead_source"])
+                            sell_price = self.parse_currency(safe_get(self.COLUMNS["sell_price"]))
 
                             if is_set:
                                 totals["appointments_set"] += 1
@@ -396,6 +429,7 @@ class SalesService:
                                 totals["jobs_sold"] += 1
                                 by_rep[rep]["jobs_sold"] += 1
                                 by_day[day]["sold"] += 1
+                                totals["weekly_sales_total"] += sell_price
 
             # Calculate conversion rates
             if totals["in_homes_attended"] > 0:
@@ -488,11 +522,11 @@ class SalesService:
     async def get_available_weeks(self) -> List[str]:
         """Get list of available week tabs."""
         try:
-            client = self._get_client()
+            service = self._get_service()
             spreadsheet_id = self._get_spreadsheet_id()
 
             # Get spreadsheet metadata
-            spreadsheet = client._service.spreadsheets().get(
+            spreadsheet = service.spreadsheets().get(
                 spreadsheetId=spreadsheet_id
             ).execute()
 
@@ -535,7 +569,7 @@ class SalesService:
                 "in_homes_attended": totals.get("in_homes_attended", 0),
                 "jobs_sold": totals.get("jobs_sold", 0),
                 "conversion_rate": totals.get("conversion_rate", 0.0),
-                "weekly_sales_total": 0  # Placeholder until sell price column added
+                "weekly_sales_total": totals.get("weekly_sales_total", 0.0)
             }
 
         except Exception as e:

@@ -2,9 +2,10 @@
 Script to hide calculation columns and protect sheets for staff view.
 
 This script:
-1. Hides financial/calculation columns (G-Q) from staff
-2. Protects formula cells from editing
-3. Allows editing only in data entry columns (A-F, I, J)
+1. Hides financial/calculation columns (F, G, H, K-Q) from staff
+2. Keeps I (Delivery Fee) and J (Laying Fee) visible for staff editing
+3. Protects formula cells from editing
+4. Allows editing only in data entry columns (A-E, I, J)
 
 Run this script once to set up protections on all weekly sheets.
 
@@ -30,11 +31,12 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 logger = logging.getLogger(__name__)
 
 # Columns to hide from staff view (0-indexed)
-# G=6 (Sell $/SQM) through Q=16 (Margin %)
-COLUMNS_TO_HIDE = {
-    'start': 6,   # Column G (Sell $/SQM)
-    'end': 17     # Through Column Q (Margin %)
-}
+# F=5 (Pallets), G=6 (Sell $/SQM), H=7 (Cost $/SQM), K-Q=10-16 (Financial calcs)
+# I=8 (Delivery Fee) and J=9 (Laying Fee) remain VISIBLE for staff editing
+COLUMNS_TO_HIDE = [
+    {'start': 5, 'end': 8},    # F, G, H (columns 5, 6, 7)
+    {'start': 10, 'end': 17},  # K through Q (columns 10-16)
+]
 
 # Columns staff can edit (0-indexed)
 # A=Day, B=Variety, C=Suburb, D=Service Type, E=SQM, I=Delivery Fee, J=Laying Fee
@@ -63,29 +65,47 @@ def get_sheet_id(client: GoogleSheetsClient, sheet_name: str) -> int:
 
 def hide_columns(client: GoogleSheetsClient, sheet_id: int, sheet_name: str):
     """Hide calculation columns from staff view."""
-    logger.info(f"Hiding columns G-Q in '{sheet_name}'")
+    logger.info(f"Hiding columns F-H and K-Q in '{sheet_name}'")
 
-    requests = [
-        {
+    # First, unhide all columns to reset state (in case I, J were previously hidden)
+    unhide_request = {
+        "updateDimensionProperties": {
+            "range": {
+                "sheetId": sheet_id,
+                "dimension": "COLUMNS",
+                "startIndex": 0,
+                "endIndex": 17  # A through Q
+            },
+            "properties": {"hiddenByUser": False},
+            "fields": "hiddenByUser"
+        }
+    }
+
+    # Build hide requests for each column range
+    hide_requests = []
+    for col_range in COLUMNS_TO_HIDE:
+        hide_requests.append({
             "updateDimensionProperties": {
                 "range": {
                     "sheetId": sheet_id,
                     "dimension": "COLUMNS",
-                    "startIndex": COLUMNS_TO_HIDE['start'],
-                    "endIndex": COLUMNS_TO_HIDE['end']
+                    "startIndex": col_range['start'],
+                    "endIndex": col_range['end']
                 },
                 "properties": {"hiddenByUser": True},
                 "fields": "hiddenByUser"
             }
-        }
-    ]
+        })
+
+    # Execute: first unhide all, then hide specific ranges
+    all_requests = [unhide_request] + hide_requests
 
     client._service.spreadsheets().batchUpdate(
         spreadsheetId=settings.google_spreadsheet_id,
-        body={"requests": requests}
+        body={"requests": all_requests}
     ).execute()
 
-    logger.info(f"  Columns G-Q hidden in '{sheet_name}'")
+    logger.info(f"  Columns F-H, K-Q hidden; I-J visible in '{sheet_name}'")
 
 
 def protect_sheet(client: GoogleSheetsClient, sheet_id: int, sheet_name: str):
@@ -212,9 +232,10 @@ def main():
 
     # Confirm before proceeding
     print("\nThis will:")
-    print("  1. Hide columns G-Q (financial data) on all weekly sheets")
-    print("  2. Protect formula columns (F, K-Q) from staff editing")
-    print(f"  3. Only '{MANAGER_EMAIL}' can edit protected cells")
+    print("  1. Hide columns F, G, H, K-Q (financial data) on all weekly sheets")
+    print("  2. Keep columns I (Delivery Fee) and J (Laying Fee) VISIBLE for staff")
+    print("  3. Protect formula columns (F, K-Q) from staff editing")
+    print(f"  4. Only '{MANAGER_EMAIL}' can edit protected cells")
     print("")
 
     confirm = input("Proceed? (yes/no): ").strip().lower()

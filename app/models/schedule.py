@@ -1,6 +1,6 @@
 """Pydantic models for schedule data."""
 from pydantic import BaseModel, Field
-from typing import List, Literal
+from typing import List, Literal, Optional
 from datetime import date
 
 
@@ -12,6 +12,7 @@ class Delivery(BaseModel):
     suburb: str = Field(..., description="Delivery suburb")
     service_type: Literal["SL", "SD", "P"] = Field(..., description="Service type code")
     laying_cost: float = Field(default=0, ge=0, description="Laying cost ($2.20/SQM for SL only)")
+    payment_status: Optional[str] = Field(default=None, description="Payment status: Paid, Payment Pending, Cash")
 
 
 class TruckData(BaseModel):

@@ -46,6 +46,7 @@ class ExcelDeliveryRow:
     sqm_sold: float             # e.g., 100.0
     pallets: float              # e.g., 2.0
     week_start_date: Optional[date] = None  # Monday of the week this delivery belongs to
+    payment_status: Optional[str] = None    # "Paid", "Payment Pending", "Cash"
 
     def get_actual_date(self) -> Optional[date]:
         """Calculate the actual date of this delivery based on week_start_date and day name.
@@ -82,6 +83,7 @@ class ExcelDeliveryRow:
             suburb=self.suburb,
             service_type=self.service_type,
             laying_cost=self.laying_cost,
+            payment_status=self.payment_status,
         )
 
 

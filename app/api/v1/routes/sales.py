@@ -97,18 +97,53 @@ async def update_appointment(request: AppointmentUpdateRequest):
 
 
 @router.get("/stats")
-async def get_weekly_stats(
-    week: str = Query(..., description="Week tab name, e.g., 'Jan-05'")
+async def get_stats(
+    view: str = Query("week", description="View type: day, week, month, annual"),
+    week: Optional[str] = Query(None, description="Week tab name for week view, e.g., 'Jan-05'"),
+    date_param: Optional[str] = Query(None, alias="date", description="Date for day view, YYYY-MM-DD"),
+    month: Optional[str] = Query(None, description="Month for month view, e.g., '2026-01'"),
+    year: Optional[str] = Query(None, description="Year for annual view, e.g., '2026'")
 ):
     """
-    Get aggregated weekly statistics (Manager Dashboard).
+    Get aggregated statistics (Manager Dashboard).
 
     Query Parameters:
-    - week (required): Week tab name, e.g., "Jan-05"
+    - view: View type - 'day', 'week', 'month', or 'annual'
+    - week: Week tab name (required for week view)
+    - date: YYYY-MM-DD format (for day view)
+    - month: YYYY-MM format (for month view)
+    - year: YYYY format (for annual view)
 
     Returns totals, breakdown by rep, lead source, and day.
     """
-    result = await sales_service.get_weekly_stats(week)
+    if view == "day":
+        if date_param:
+            try:
+                target_date = date.fromisoformat(date_param)
+            except ValueError:
+                raise HTTPException(status_code=400, detail="Invalid date format. Use YYYY-MM-DD")
+        else:
+            target_date = date.today()
+
+        result = await sales_service.get_daily_stats(target_date)
+
+    elif view == "week":
+        if not week:
+            week = sales_service.get_week_tab_name(date.today())
+        result = await sales_service.get_weekly_stats(week)
+
+    elif view == "month":
+        if not month:
+            month = date.today().strftime("%Y-%m")
+        result = await sales_service.get_monthly_stats(month)
+
+    elif view == "annual":
+        if not year:
+            year = str(date.today().year)
+        result = await sales_service.get_annual_stats(year)
+
+    else:
+        raise HTTPException(status_code=400, detail=f"Invalid view type: {view}")
 
     if not result.get("success"):
         raise HTTPException(status_code=500, detail=result.get("error", "Failed to fetch stats"))

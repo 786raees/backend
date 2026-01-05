@@ -548,6 +548,244 @@ class SalesService:
             logger.error(f"Error fetching available weeks: {e}")
             return []
 
+    async def get_daily_stats(self, target_date: date) -> Dict:
+        """Get statistics for a single day."""
+        if target_date.weekday() >= 5:
+            return {
+                "success": False,
+                "error": "No appointments on weekends"
+            }
+
+        week_tab = self.get_week_tab_name(target_date)
+        day_name = self.get_day_name(target_date)
+
+        try:
+            # Get full week stats and filter to one day
+            week_result = await self.get_weekly_stats(week_tab)
+
+            if not week_result.get("success"):
+                return week_result
+
+            # Filter by_day to just this day
+            by_day = week_result.get("by_day", [])
+            day_data = next((d for d in by_day if d["day"] == day_name), {"attended": 0, "sold": 0})
+
+            # Calculate day totals from day_data
+            totals = {
+                "appointments_set": 0,
+                "appointments_confirmed": 0,
+                "in_homes_attended": day_data.get("attended", 0),
+                "jobs_sold": day_data.get("sold", 0),
+                "conversion_rate": 0.0
+            }
+
+            if totals["in_homes_attended"] > 0:
+                totals["conversion_rate"] = round(
+                    (totals["jobs_sold"] / totals["in_homes_attended"]) * 100, 1
+                )
+
+            return {
+                "success": True,
+                "view": "day",
+                "week": week_tab,
+                "week_display": f"{day_name}, {self.format_display_date(target_date)}",
+                "totals": totals,
+                "by_rep": week_result.get("by_rep", []),
+                "by_lead_source": week_result.get("by_lead_source", []),
+                "by_day": [day_data]
+            }
+
+        except Exception as e:
+            logger.error(f"Error fetching daily stats: {e}")
+            return {"success": False, "error": str(e)}
+
+    async def get_monthly_stats(self, month_str: str) -> Dict:
+        """Get aggregated statistics for a month."""
+        try:
+            # Parse month string (e.g., "2026-01")
+            year, month = map(int, month_str.split("-"))
+
+            # Get all available weeks
+            available_weeks = await self.get_available_weeks()
+
+            # Filter weeks that fall within this month
+            weeks_in_month = []
+            for week_tab in available_weeks:
+                try:
+                    # Parse week tab (e.g., "Jan-05")
+                    month_abbr, day_str = week_tab.split("-")
+                    months = {
+                        "Jan": 1, "Feb": 2, "Mar": 3, "Apr": 4,
+                        "May": 5, "Jun": 6, "Jul": 7, "Aug": 8,
+                        "Sep": 9, "Oct": 10, "Nov": 11, "Dec": 12
+                    }
+                    week_month = months.get(month_abbr, 0)
+                    week_day = int(day_str)
+
+                    # Check if this week's Monday falls in the target month
+                    if week_month == month:
+                        weeks_in_month.append(week_tab)
+                    # Also include if week spans into target month
+                    elif week_month == month - 1 or (month == 1 and week_month == 12):
+                        # Check if Friday of this week is in target month
+                        from datetime import datetime
+                        try:
+                            monday = date(year if week_month <= month else year - 1, week_month, week_day)
+                            friday = monday + timedelta(days=4)
+                            if friday.month == month:
+                                weeks_in_month.append(week_tab)
+                        except:
+                            pass
+                except:
+                    continue
+
+            # Aggregate stats from all weeks
+            totals = {
+                "appointments_set": 0,
+                "appointments_confirmed": 0,
+                "in_homes_attended": 0,
+                "jobs_sold": 0,
+                "weekly_sales_total": 0.0,
+                "conversion_rate": 0.0
+            }
+
+            by_rep_agg = {rep: {
+                "name": rep,
+                "appointments_set": 0,
+                "appointments_confirmed": 0,
+                "in_homes_attended": 0,
+                "jobs_sold": 0,
+                "conversion_rate": 0.0
+            } for rep in self.SALES_REPS}
+
+            for week_tab in weeks_in_month:
+                week_stats = await self.get_weekly_stats(week_tab)
+                if week_stats.get("success"):
+                    week_totals = week_stats.get("totals", {})
+                    totals["appointments_set"] += week_totals.get("appointments_set", 0)
+                    totals["appointments_confirmed"] += week_totals.get("appointments_confirmed", 0)
+                    totals["in_homes_attended"] += week_totals.get("in_homes_attended", 0)
+                    totals["jobs_sold"] += week_totals.get("jobs_sold", 0)
+                    totals["weekly_sales_total"] += week_totals.get("weekly_sales_total", 0.0)
+
+                    for rep_data in week_stats.get("by_rep", []):
+                        rep_name = rep_data["name"]
+                        if rep_name in by_rep_agg:
+                            by_rep_agg[rep_name]["appointments_set"] += rep_data.get("appointments_set", 0)
+                            by_rep_agg[rep_name]["appointments_confirmed"] += rep_data.get("appointments_confirmed", 0)
+                            by_rep_agg[rep_name]["in_homes_attended"] += rep_data.get("in_homes_attended", 0)
+                            by_rep_agg[rep_name]["jobs_sold"] += rep_data.get("jobs_sold", 0)
+
+            # Calculate conversion rates
+            if totals["in_homes_attended"] > 0:
+                totals["conversion_rate"] = round(
+                    (totals["jobs_sold"] / totals["in_homes_attended"]) * 100, 1
+                )
+
+            by_rep_list = []
+            for rep in self.SALES_REPS:
+                rep_data = by_rep_agg[rep]
+                if rep_data["in_homes_attended"] > 0:
+                    rep_data["conversion_rate"] = round(
+                        (rep_data["jobs_sold"] / rep_data["in_homes_attended"]) * 100, 1
+                    )
+                by_rep_list.append(rep_data)
+
+            # Format month display
+            from calendar import month_name
+            month_display = f"{month_name[month]} {year}"
+
+            return {
+                "success": True,
+                "view": "month",
+                "week_display": month_display,
+                "totals": totals,
+                "by_rep": by_rep_list,
+                "by_lead_source": [],
+                "by_day": [],
+                "weeks_included": weeks_in_month
+            }
+
+        except Exception as e:
+            logger.error(f"Error fetching monthly stats: {e}")
+            return {"success": False, "error": str(e)}
+
+    async def get_annual_stats(self, year_str: str) -> Dict:
+        """Get aggregated statistics for an entire year."""
+        try:
+            year = int(year_str)
+
+            # Get all available weeks
+            available_weeks = await self.get_available_weeks()
+
+            # We'll aggregate all weeks for simplicity (assuming all are in the target year)
+            totals = {
+                "appointments_set": 0,
+                "appointments_confirmed": 0,
+                "in_homes_attended": 0,
+                "jobs_sold": 0,
+                "weekly_sales_total": 0.0,
+                "conversion_rate": 0.0
+            }
+
+            by_rep_agg = {rep: {
+                "name": rep,
+                "appointments_set": 0,
+                "appointments_confirmed": 0,
+                "in_homes_attended": 0,
+                "jobs_sold": 0,
+                "conversion_rate": 0.0
+            } for rep in self.SALES_REPS}
+
+            weeks_included = 0
+            for week_tab in available_weeks:
+                week_stats = await self.get_weekly_stats(week_tab)
+                if week_stats.get("success"):
+                    weeks_included += 1
+                    week_totals = week_stats.get("totals", {})
+                    totals["appointments_set"] += week_totals.get("appointments_set", 0)
+                    totals["appointments_confirmed"] += week_totals.get("appointments_confirmed", 0)
+                    totals["in_homes_attended"] += week_totals.get("in_homes_attended", 0)
+                    totals["jobs_sold"] += week_totals.get("jobs_sold", 0)
+                    totals["weekly_sales_total"] += week_totals.get("weekly_sales_total", 0.0)
+
+                    for rep_data in week_stats.get("by_rep", []):
+                        rep_name = rep_data["name"]
+                        if rep_name in by_rep_agg:
+                            by_rep_agg[rep_name]["appointments_set"] += rep_data.get("appointments_set", 0)
+                            by_rep_agg[rep_name]["appointments_confirmed"] += rep_data.get("appointments_confirmed", 0)
+                            by_rep_agg[rep_name]["in_homes_attended"] += rep_data.get("in_homes_attended", 0)
+                            by_rep_agg[rep_name]["jobs_sold"] += rep_data.get("jobs_sold", 0)
+
+            # Calculate conversion rates
+            if totals["in_homes_attended"] > 0:
+                totals["conversion_rate"] = round(
+                    (totals["jobs_sold"] / totals["in_homes_attended"]) * 100, 1
+                )
+
+            by_rep_list = []
+            for rep in self.SALES_REPS:
+                rep_data = by_rep_agg[rep]
+                if rep_data["in_homes_attended"] > 0:
+                    rep_data["conversion_rate"] = round(
+                        (rep_data["jobs_sold"] / rep_data["in_homes_attended"]) * 100, 1
+                    )
+                by_rep_list.append(rep_data)
+
+            return {
+                "success": True,
+                "view": "annual",
+                "week_display": f"Year {year} ({weeks_included} weeks)",
+                "totals": totals,
+                "by_rep": by_rep_list,
+                "by_lead_source": [],
+                "by_day": []
+            }
+
+        except Exception as e:
+            logger.error(f"Error fetching annual stats: {e}")
+            return {"success": False, "error": str(e)}
+
     async def get_ceo_summary(self, week_tab: Optional[str] = None) -> Dict:
         """Get summary metrics for CEO dashboard."""
         if week_tab is None:

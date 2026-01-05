@@ -287,6 +287,8 @@ class WeeklySheetParser:
                     service_type = cls._safe_str(row[3] if len(row) > 3 else None).upper()
                     sqm_sold = cls._safe_float(row[4] if len(row) > 4 else None)
                     pallets = cls._safe_float(row[5] if len(row) > 5 else None)
+                    # Column K (index 10) = Payment Status
+                    payment_status = cls._safe_str(row[10] if len(row) > 10 else None) or None
 
                     # Skip empty slots (no SQM)
                     if sqm_sold <= 0:
@@ -304,6 +306,7 @@ class WeeklySheetParser:
                         service_type=service_type,
                         sqm_sold=sqm_sold,
                         pallets=pallets,
+                        payment_status=payment_status,
                     )
                     result[current_truck].append(delivery)
 
@@ -362,6 +365,8 @@ class WeeklySheetParser:
                     service_type = cls._safe_str(row[3] if len(row) > 3 else None).upper()
                     sqm_sold = cls._safe_float(row[4] if len(row) > 4 else None)
                     pallets = cls._safe_float(row[5] if len(row) > 5 else None)
+                    # Column K (index 10) = Payment Status
+                    payment_status = cls._safe_str(row[10] if len(row) > 10 else None) or None
 
                     # Skip empty rows (no SQM)
                     if sqm_sold <= 0:
@@ -385,6 +390,7 @@ class WeeklySheetParser:
                         service_type=service_type,
                         sqm_sold=sqm_sold,
                         pallets=pallets,
+                        payment_status=payment_status,
                     )
                     result[current_truck].append(delivery)
 

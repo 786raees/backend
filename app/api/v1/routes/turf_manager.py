@@ -122,9 +122,27 @@ class TurfManagerService:
         delivery_t2_total = 0.0
         laying_fees_total = 0.0
         laying_costs_total = 0.0
+        # Per-truck laying tracking
+        laying_t1_fees = 0.0
+        laying_t1_costs = 0.0
+        laying_t2_fees = 0.0
+        laying_t2_costs = 0.0
+        current_truck = 1  # Track which truck section we're in
 
         # Skip header row
         for row in rows[1:]:
+            if len(row) < 1:
+                continue
+
+            # Check for truck section markers
+            first_cell = str(row[0]).strip().upper() if row else ""
+            if "TRUCK 1" in first_cell:
+                current_truck = 1
+                continue
+            elif "TRUCK 2" in first_cell:
+                current_truck = 2
+                continue
+
             if len(row) < 5:  # Skip rows without essential data
                 continue
 
@@ -152,11 +170,7 @@ class TurfManagerService:
             variety_stats[variety].sell_price += turf_revenue
             variety_stats[variety].cost += turf_cost
 
-            # Check which truck (determine from day/slot or row position)
-            day_slot = str(row[self.COLUMNS["day_slot"]]) if len(row) > 0 else ""
-            # Assume T1 vs T2 based on delivery fee columns if present in data
-            # For now, split delivery fees evenly or based on row patterns
-            # Check if delivery_t1/t2 columns exist and have data
+            # Track delivery fees by truck
             if len(row) > self.COLUMNS["delivery_t1"]:
                 dt1 = self._parse_float(row[self.COLUMNS["delivery_t1"]])
                 delivery_t1_total += dt1
@@ -164,10 +178,17 @@ class TurfManagerService:
                 dt2 = self._parse_float(row[self.COLUMNS["delivery_t2"]])
                 delivery_t2_total += dt2
 
-            # Accumulate laying fees and costs
+            # Accumulate laying fees and costs by truck
+            laying_cost = sqm * self.LAYING_COST_PER_SQM
             laying_fees_total += laying_fee
-            # Laying cost is $2.20 per SQM for ALL deliveries
-            laying_costs_total += sqm * self.LAYING_COST_PER_SQM
+            laying_costs_total += laying_cost
+
+            if current_truck == 1:
+                laying_t1_fees += laying_fee
+                laying_t1_costs += laying_cost
+            else:
+                laying_t2_fees += laying_fee
+                laying_t2_costs += laying_cost
 
         # Calculate variety totals
         variety_totals = VarietyTotals(
@@ -183,10 +204,14 @@ class TurfManagerService:
             total=delivery_t1_total + delivery_t2_total,
         )
 
-        # Calculate laying stats
+        # Calculate laying stats with per-truck breakdown
         laying = LayingStats(
             sales=laying_fees_total,
             costs=laying_costs_total,
+            truck_1_fees=laying_t1_fees,
+            truck_1_costs=laying_t1_costs,
+            truck_2_fees=laying_t2_fees,
+            truck_2_costs=laying_t2_costs,
         )
 
         # Calculate financial totals

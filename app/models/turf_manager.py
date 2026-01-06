@@ -26,9 +26,13 @@ class DeliveryFees(BaseModel):
 
 
 class LayingStats(BaseModel):
-    """Laying fees and costs."""
-    sales: float = Field(default=0, ge=0, description="Laying fees charged ($)")
-    costs: float = Field(default=0, ge=0, description="Laying costs ($2.20/SQM for all deliveries)")
+    """Laying fees and costs with per-truck breakdown."""
+    sales: float = Field(default=0, ge=0, description="Total laying fees charged ($)")
+    costs: float = Field(default=0, ge=0, description="Total laying costs ($2.20/SQM)")
+    truck_1_fees: float = Field(default=0, ge=0, description="Truck 1 laying fees ($)")
+    truck_1_costs: float = Field(default=0, ge=0, description="Truck 1 laying costs ($)")
+    truck_2_fees: float = Field(default=0, ge=0, description="Truck 2 laying fees ($)")
+    truck_2_costs: float = Field(default=0, ge=0, description="Truck 2 laying costs ($)")
 
 
 class FinancialTotals(BaseModel):

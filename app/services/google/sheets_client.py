@@ -76,13 +76,13 @@ class GoogleSheetsClient:
     def get_worksheet_data(
         self,
         sheet_name: str,
-        range_cols: str = "A:K",
+        range_cols: str = "A:P",
     ) -> List[List[Any]]:
         """Fetch data from a worksheet.
 
         Args:
             sheet_name: Name of the worksheet tab (e.g., "Jan 5 - T1")
-            range_cols: Column range to fetch (default: A:K for delivery data incl. Payment Status)
+            range_cols: Column range to fetch (default: A:P for delivery data incl. Payment Status in col P)
 
         Returns:
             2D list of cell values, similar to Excel format.

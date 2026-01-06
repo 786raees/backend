@@ -158,6 +158,9 @@ class TurfManagerService:
             delivery_fee = self._parse_float(row[self.COLUMNS["delivery_fee"]] if len(row) > self.COLUMNS["delivery_fee"] else 0)
             laying_fee = self._parse_float(row[self.COLUMNS["laying_fee"]] if len(row) > self.COLUMNS["laying_fee"] else 0)
 
+            # Get service type (Column D) - SL, SD, or P
+            service_type = str(row[self.COLUMNS["service_type"]]).strip().upper() if len(row) > self.COLUMNS["service_type"] else ""
+
             # Calculate turf revenue and cost
             turf_revenue = sqm * sell_per_sqm
             turf_cost = sqm * cost_per_sqm
@@ -171,15 +174,14 @@ class TurfManagerService:
             variety_stats[variety].cost += turf_cost
 
             # Track delivery fees by truck
-            if len(row) > self.COLUMNS["delivery_t1"]:
-                dt1 = self._parse_float(row[self.COLUMNS["delivery_t1"]])
-                delivery_t1_total += dt1
-            if len(row) > self.COLUMNS["delivery_t2"]:
-                dt2 = self._parse_float(row[self.COLUMNS["delivery_t2"]])
-                delivery_t2_total += dt2
+            if current_truck == 1:
+                delivery_t1_total += delivery_fee
+            else:
+                delivery_t2_total += delivery_fee
 
             # Accumulate laying fees and costs by truck
-            laying_cost = sqm * self.LAYING_COST_PER_SQM
+            # IMPORTANT: Laying Cost ($2.20/SQM) ONLY applies to SL (Supply & Lay) service type
+            laying_cost = sqm * self.LAYING_COST_PER_SQM if service_type == "SL" else 0.0
             laying_fees_total += laying_fee
             laying_costs_total += laying_cost
 

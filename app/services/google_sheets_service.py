@@ -5,6 +5,7 @@ from datetime import datetime, timezone, date, timedelta
 from typing import Dict, List, Optional, Tuple
 
 from app.config import settings
+from app.core.constants import get_australia_today
 from app.services.google.sheets_client import GoogleSheetsClient
 from app.services.google.exceptions import (
     GoogleSheetsError,
@@ -31,7 +32,7 @@ def parse_sheet_name_to_date(sheet_name: str) -> Optional[date]:
         parsed = datetime.strptime(sheet_name, '%b-%d')
 
         # Determine the year - use current year, but handle year boundary
-        today = date.today()
+        today = get_australia_today()
         year = today.year
 
         # If the parsed month is January and we're in December, it's next year
@@ -102,8 +103,9 @@ def find_best_matching_sheet(target_sheet: str, available_sheets: List[str]) -> 
     # Parse target date
     try:
         target_month_day = datetime.strptime(target_sheet, '%b-%d')
-        current_year = date.today().year
-        if target_month_day.month == 1 and date.today().month == 12:
+        today = get_australia_today()
+        current_year = today.year
+        if target_month_day.month == 1 and today.month == 12:
             target_full_date = date(current_year + 1, target_month_day.month, target_month_day.day)
         else:
             target_full_date = date(current_year, target_month_day.month, target_month_day.day)
@@ -273,7 +275,7 @@ class GoogleSheetsService:
         Returns:
             Tuple of (truck1_deliveries, truck2_deliveries).
         """
-        today = date.today()
+        today = get_australia_today()
 
         # Get the sheet names we need to cover 10 business days
         required_sheets = get_required_week_sheets(today, 10)

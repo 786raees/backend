@@ -4,7 +4,7 @@ from datetime import date, datetime, timedelta, timezone
 from typing import Dict, List, Optional, Tuple
 
 from app.models.schedule import Delivery, TruckData, DaySchedule, ScheduleResponse
-from app.core.constants import TRUCK1_CAPACITY, TRUCK2_CAPACITY
+from app.core.constants import TRUCK1_CAPACITY, TRUCK2_CAPACITY, get_australia_today
 from app.services.excel.excel_parser import ExcelDeliveryRow
 
 logger = logging.getLogger(__name__)
@@ -221,7 +221,7 @@ class ScheduleBuilder:
             Complete ScheduleResponse with all days populated.
         """
         if start_date is None:
-            start_date = date.today()
+            start_date = get_australia_today()
 
         # Generate 10 business days
         business_days = get_next_business_days(start_date, 10)

@@ -1,4 +1,25 @@
 """Application constants for GLC Dashboard."""
+from datetime import datetime, date, timezone, timedelta
+from zoneinfo import ZoneInfo
+
+# Australian timezone (Brisbane - no DST)
+AUSTRALIA_TZ = ZoneInfo("Australia/Brisbane")
+
+
+def get_australia_now() -> datetime:
+    """Get current datetime in Australian timezone."""
+    return datetime.now(AUSTRALIA_TZ)
+
+
+def get_australia_today() -> date:
+    """Get current date in Australian timezone.
+
+    This should be used instead of date.today() to ensure the dashboard
+    displays the correct day for Australian business hours, regardless
+    of the server's timezone (e.g., UTC on Render.com).
+    """
+    return get_australia_now().date()
+
 
 # Truck capacity in SQM
 TRUCK1_CAPACITY = 500

@@ -54,11 +54,17 @@ class SalesService:
         "job_sold": 6,       # G
         "reason": 7,         # H
         "conversion": 8,     # I
-        "sell_price": 9      # J - Sold Price ex GST
+        "sell_price": 9,     # J - Sold Price ex GST
+        "appointment_time": 10,  # K - Appointment Time
+        "project_type": 11,      # L - Project Type
+        "suburb": 12             # M - Suburb
     }
 
     # Editable columns (letter format)
-    EDITABLE_COLUMNS = ["F", "G", "H", "J"]
+    EDITABLE_COLUMNS = ["F", "G", "H", "J", "K", "L"]
+
+    # Project type options
+    PROJECT_TYPES = ["Turf Install", "Landscaping", "Combo", "Maintenance", "Other"]
 
     def __init__(self):
         self._client: Optional[GoogleSheetsClient] = None
@@ -177,7 +183,10 @@ class SalesService:
             "appointment_attended": self.parse_boolean(safe_get(self.COLUMNS["appointment_attended"])),
             "job_sold": self.parse_boolean(safe_get(self.COLUMNS["job_sold"])),
             "reason": safe_get(self.COLUMNS["reason"]),
-            "sell_price": self.parse_currency(safe_get(self.COLUMNS["sell_price"]))
+            "sell_price": self.parse_currency(safe_get(self.COLUMNS["sell_price"])),
+            "appointment_time": safe_get(self.COLUMNS["appointment_time"]),
+            "project_type": safe_get(self.COLUMNS["project_type"]),
+            "suburb": safe_get(self.COLUMNS["suburb"])
         }
 
     async def get_daily_schedule(self, target_date: date) -> Dict:
@@ -215,7 +224,7 @@ class SalesService:
             day_start_row = self.DAY_HEADER_ROWS[day_name]
             day_end_row = day_start_row + 28  # Covers all 3 reps with buffer
 
-            range_notation = f"'{week_tab}'!A{day_start_row}:J{day_end_row}"
+            range_notation = f"'{week_tab}'!A{day_start_row}:M{day_end_row}"
 
             result = service.spreadsheets().values().get(
                 spreadsheetId=spreadsheet_id,
@@ -256,7 +265,10 @@ class SalesService:
                             "appointment_attended": False,
                             "job_sold": False,
                             "reason": "",
-                            "sell_price": 0.0
+                            "sell_price": 0.0,
+                            "appointment_time": "",
+                            "project_type": "",
+                            "suburb": ""
                         }
 
                     rep_appointments.append(appointment)
@@ -356,7 +368,7 @@ class SalesService:
             spreadsheet_id = self._get_spreadsheet_id()
 
             # Read entire week's data (rows 1-150 covers all days)
-            range_notation = f"'{week_tab}'!A1:J150"
+            range_notation = f"'{week_tab}'!A1:M150"
 
             result = service.spreadsheets().values().get(
                 spreadsheetId=spreadsheet_id,

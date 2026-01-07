@@ -391,7 +391,8 @@ class SalesService:
                 "appointments_set": 0,
                 "appointments_confirmed": 0,
                 "in_homes_attended": 0,
-                "jobs_sold": 0
+                "jobs_sold": 0,
+                "sales_total": 0.0
             } for rep in self.SALES_REPS}
 
             by_day = {day: {"day": day, "attended": 0, "sold": 0} for day in self.DAYS}
@@ -442,6 +443,7 @@ class SalesService:
                                 by_rep[rep]["jobs_sold"] += 1
                                 by_day[day]["sold"] += 1
                                 totals["weekly_sales_total"] += sell_price
+                                by_rep[rep]["sales_total"] += sell_price
 
             # Calculate conversion rates
             if totals["in_homes_attended"] > 0:

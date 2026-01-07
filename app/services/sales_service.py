@@ -24,7 +24,7 @@ class SalesService:
 
     # Configuration constants
     SALES_REPS = ["GLEN", "GREAT REP", "ILAN"]
-    DAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"]
+    DAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
     LEAD_SOURCES = ["Google", "Facebook", "Referral", "Vehicles", "Word of Mouth", "Other"]
     REASONS = ["Sold", "No Show", "Price", "Need Completed Sooner", "Not Ready", "Wrong Product", "Competitor", "Other"]
 
@@ -34,13 +34,31 @@ class SalesService:
         "Tuesday": 31,
         "Wednesday": 61,
         "Thursday": 91,
-        "Friday": 121
+        "Friday": 121,
+        "Saturday": 151
+    }
+
+    # Slots per rep per day (Saturday has only 3 slots)
+    SLOTS_PER_DAY = {
+        "Monday": 5,
+        "Tuesday": 5,
+        "Wednesday": 5,
+        "Thursday": 5,
+        "Friday": 5,
+        "Saturday": 3
     }
 
     REP_SLOT_OFFSETS = {
         "GLEN": 4,
         "GREAT REP": 13,
         "ILAN": 22
+    }
+
+    # Saturday has different rep offsets (3 slots per rep instead of 5)
+    SATURDAY_REP_SLOT_OFFSETS = {
+        "GLEN": 4,
+        "GREAT REP": 10,
+        "ILAN": 16
     }
 
     # Column mapping (0-indexed for API)
@@ -103,8 +121,12 @@ class SalesService:
         return monday_of_week.strftime("%b-%d")
 
     def get_day_name(self, target_date: date) -> str:
-        """Get weekday name for the target date."""
-        return self.DAYS[target_date.weekday()] if target_date.weekday() < 5 else None
+        """Get weekday name for the target date (Mon-Sat, excludes Sunday)."""
+        weekday = target_date.weekday()
+        # Monday=0, Tuesday=1, ..., Saturday=5, Sunday=6
+        if weekday <= 5:  # Monday through Saturday
+            return self.DAYS[weekday]
+        return None  # Sunday
 
     def calculate_row_number(self, day: str, rep: str, slot: int) -> int:
         """
@@ -119,7 +141,11 @@ class SalesService:
             Row number (1-indexed for Google Sheets API)
         """
         day_base = self.DAY_HEADER_ROWS.get(day, 1)
-        rep_offset = self.REP_SLOT_OFFSETS.get(rep, 4)
+        # Use different offsets for Saturday
+        if day == "Saturday":
+            rep_offset = self.SATURDAY_REP_SLOT_OFFSETS.get(rep, 4)
+        else:
+            rep_offset = self.REP_SLOT_OFFSETS.get(rep, 4)
         return day_base + rep_offset + (slot - 1)
 
     def parse_boolean(self, value: Any) -> bool:
@@ -191,11 +217,11 @@ class SalesService:
 
     async def get_daily_schedule(self, target_date: date) -> Dict:
         """Get all appointments for a specific date."""
-        # Check if weekend
-        if target_date.weekday() >= 5:
+        # Check if Sunday (only Sunday is excluded, Saturday has 3 slots)
+        if target_date.weekday() == 6:  # Sunday
             return {
                 "success": False,
-                "error": "No appointments on weekends"
+                "error": "No appointments on Sundays"
             }
 
         week_tab = self.get_week_tab_name(target_date)
@@ -222,7 +248,8 @@ class SalesService:
             # Read the entire day's data (all reps)
             # We need rows from the day header to cover all 3 reps
             day_start_row = self.DAY_HEADER_ROWS[day_name]
-            day_end_row = day_start_row + 28  # Covers all 3 reps with buffer
+            # Saturday has fewer rows (3 slots per rep × 3 reps = ~20 rows)
+            day_end_row = day_start_row + (20 if day_name == "Saturday" else 28)
 
             range_notation = f"'{week_tab}'!A{day_start_row}:M{day_end_row}"
 
@@ -242,10 +269,13 @@ class SalesService:
                 "total_sold": 0
             }
 
+            # Get number of slots for this day
+            num_slots = self.SLOTS_PER_DAY.get(day_name, 5)
+
             for rep in self.SALES_REPS:
                 rep_appointments = []
 
-                for slot in range(1, 6):
+                for slot in range(1, num_slots + 1):
                     row_number = self.calculate_row_number(day_name, rep, slot)
                     # Convert to 0-indexed relative to our fetched range
                     relative_row = row_number - day_start_row
@@ -367,8 +397,8 @@ class SalesService:
             service = self._get_service()
             spreadsheet_id = self._get_spreadsheet_id()
 
-            # Read entire week's data (rows 1-150 covers all days)
-            range_notation = f"'{week_tab}'!A1:M150"
+            # Read entire week's data (rows 1-180 covers Mon-Sat with buffer)
+            range_notation = f"'{week_tab}'!A1:M180"
 
             result = service.spreadsheets().values().get(
                 spreadsheetId=spreadsheet_id,
@@ -401,8 +431,10 @@ class SalesService:
 
             # Parse each day and rep
             for day in self.DAYS:
+                # Get number of slots for this day (3 for Saturday, 5 for weekdays)
+                num_slots = self.SLOTS_PER_DAY.get(day, 5)
                 for rep in self.SALES_REPS:
-                    for slot in range(1, 6):
+                    for slot in range(1, num_slots + 1):
                         row_number = self.calculate_row_number(day, rep, slot)
                         row_idx = row_number - 1  # Convert to 0-indexed
 

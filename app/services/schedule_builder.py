@@ -143,12 +143,16 @@ class ScheduleBuilder:
             # Try to get actual date from week_start_date
             actual_date = delivery.get_actual_date()
 
-            if actual_date and actual_date in business_days_set:
-                # Use the exact date calculated from week_start_date
-                grouped[actual_date].append(delivery)
-                logger.debug(f"Mapped '{delivery.day}' to {actual_date} using week_start_date")
+            if actual_date:
+                # Week start date is set - use strict date matching only
+                if actual_date in business_days_set:
+                    grouped[actual_date].append(delivery)
+                    logger.debug(f"Mapped '{delivery.day}' to {actual_date} using week_start_date")
+                else:
+                    # Delivery is outside the business days window - skip it
+                    logger.debug(f"Skipping delivery '{delivery.suburb}' on {actual_date} - outside 10-day window")
             else:
-                # Fallback to day name matching (legacy behavior)
+                # No week_start_date - use fallback day name matching (legacy behavior)
                 normalized_day, week = normalize_day_name(delivery.day)
                 dates_for_day = day_to_dates.get(normalized_day, [])
 
@@ -164,10 +168,7 @@ class ScheduleBuilder:
                         grouped[target_date].append(delivery)
                         logger.warning(f"Week {week} requested for '{delivery.day}' but only {len(dates_for_day)} occurrence(s) available")
                 else:
-                    if actual_date:
-                        logger.debug(f"Delivery '{delivery.day}' on {actual_date} is outside business days range")
-                    else:
-                        logger.warning(f"No matching date for day '{delivery.day}'")
+                    logger.warning(f"No matching date for day '{delivery.day}'")
 
         return grouped
 

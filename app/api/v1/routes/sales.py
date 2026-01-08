@@ -60,9 +60,9 @@ async def get_daily_schedule(
     else:
         target_date = date.today()
 
-    # Check for weekend
-    if target_date.weekday() >= 5:
-        raise HTTPException(status_code=400, detail="No appointments on weekends")
+    # Check for Sunday only (Saturday has 3 slots per rep)
+    if target_date.weekday() == 6:  # Sunday only
+        raise HTTPException(status_code=400, detail="No appointments on Sundays")
 
     result = await sales_service.get_daily_schedule(target_date)
 

@@ -82,7 +82,7 @@ class SalesService:
     EDITABLE_COLUMNS = ["F", "G", "H", "J", "K", "L"]
 
     # Project type options
-    PROJECT_TYPES = ["Turf Install", "Landscaping", "Combo", "Maintenance", "Other"]
+    PROJECT_TYPES = ["Turf", "Synthetic Turf", "Landscaping", "New Build"]
 
     def __init__(self):
         self._client: Optional[GoogleSheetsClient] = None
@@ -596,10 +596,10 @@ class SalesService:
 
     async def get_daily_stats(self, target_date: date) -> Dict:
         """Get statistics for a single day."""
-        if target_date.weekday() >= 5:
+        if target_date.weekday() == 6:  # Sunday only
             return {
                 "success": False,
-                "error": "No appointments on weekends"
+                "error": "No appointments on Sundays"
             }
 
         week_tab = self.get_week_tab_name(target_date)

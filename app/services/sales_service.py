@@ -610,8 +610,8 @@ class SalesService:
             cutoff_date = date(2026, 1, 5)
             week_dates = [(d, t) for d, t in week_dates if d >= cutoff_date]
 
-            # Sort by date (most recent first)
-            week_dates.sort(key=lambda x: x[0], reverse=True)
+            # Sort by date (oldest first for chronological order)
+            week_dates.sort(key=lambda x: x[0], reverse=False)
 
             # Return just the tab names
             available = [title for _, title in week_dates]

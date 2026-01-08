@@ -579,14 +579,42 @@ class SalesService:
             sheets = spreadsheet.get('sheets', [])
             week_pattern = re.compile(r'^[A-Z][a-z]{2}-\d{2}$')
 
-            available = []
+            # Parse tab names into (date, tab_name) tuples
+            week_dates = []
             for sheet in sheets:
                 title = sheet.get('properties', {}).get('title', '')
                 if week_pattern.match(title):
-                    available.append(title)
+                    try:
+                        # Parse tab name (e.g., "Jan-05")
+                        month_str, day_str = title.split("-")
+                        months = {
+                            "Jan": 1, "Feb": 2, "Mar": 3, "Apr": 4,
+                            "May": 5, "Jun": 6, "Jul": 7, "Aug": 8,
+                            "Sep": 9, "Oct": 10, "Nov": 11, "Dec": 12
+                        }
+                        month = months.get(month_str, 1)
+                        day = int(day_str)
+
+                        # Determine year (2026 for Jan onwards, 2025 for Dec)
+                        year = 2026 if month >= 1 else 2025
+                        if month == 12:  # December tabs are from 2025
+                            year = 2025
+
+                        tab_date = date(year, month, day)
+                        week_dates.append((tab_date, title))
+                    except (ValueError, KeyError):
+                        # Skip invalid tab names
+                        continue
+
+            # Filter out dates before January 5, 2026
+            cutoff_date = date(2026, 1, 5)
+            week_dates = [(d, t) for d, t in week_dates if d >= cutoff_date]
 
             # Sort by date (most recent first)
-            available.sort(reverse=True)
+            week_dates.sort(key=lambda x: x[0], reverse=True)
+
+            # Return just the tab names
+            available = [title for _, title in week_dates]
 
             return available
 

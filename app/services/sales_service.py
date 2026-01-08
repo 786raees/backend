@@ -82,7 +82,7 @@ class SalesService:
     EDITABLE_COLUMNS = ["F", "G", "H", "J", "K", "L"]
 
     # Project type options
-    PROJECT_TYPES = ["Turf", "Synthetic Turf", "Landscaping", "New Build"]
+    PROJECT_TYPES = ["Turf Project", "Synthetic Turf Project", "Turf and Landscape project", "New Build Landscape Project"]
 
     def __init__(self):
         self._client: Optional[GoogleSheetsClient] = None

@@ -261,7 +261,7 @@ class SalesService:
             # Saturday has fewer rows (3 slots per rep × 3 reps = ~20 rows)
             day_end_row = day_start_row + (20 if day_name == "Saturday" else 28)
 
-            range_notation = f"'{week_tab}'!A{day_start_row}:M{day_end_row}"
+            range_notation = f"'{week_tab}'!A{day_start_row}:R{day_end_row}"
 
             result = service.spreadsheets().values().get(
                 spreadsheetId=spreadsheet_id,

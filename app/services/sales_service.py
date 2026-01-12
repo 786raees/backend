@@ -75,11 +75,15 @@ class SalesService:
         "sell_price": 9,     # J - Sold Price ex GST
         "appointment_time": 10,  # K - Appointment Time
         "project_type": 11,      # L - Project Type
-        "suburb": 12             # M - Suburb
+        "suburb": 12,            # M - Suburb
+        "region": 13,            # N - Region (NEW)
+        "appointment_set_who": 14,      # O - Appointment Set Who (NEW)
+        "appointment_confirmed_by": 15,  # P - Appointment Confirmed By (NEW)
+        "gross_profit_margin_pct": 16    # Q - Gross Profit Margin % (NEW)
     }
 
     # Editable columns (letter format)
-    EDITABLE_COLUMNS = ["F", "G", "H", "J", "K", "L"]
+    EDITABLE_COLUMNS = ["C", "F", "G", "H", "J", "K", "L", "M", "N", "O", "P", "Q"]
 
     # Project type options
     PROJECT_TYPES = ["Turf Project", "Synthetic Turf Project", "Turf and Landscape project", "New Build Landscape Project"]
@@ -212,7 +216,11 @@ class SalesService:
             "sell_price": self.parse_currency(safe_get(self.COLUMNS["sell_price"])),
             "appointment_time": safe_get(self.COLUMNS["appointment_time"]),
             "project_type": safe_get(self.COLUMNS["project_type"]),
-            "suburb": safe_get(self.COLUMNS["suburb"])
+            "suburb": safe_get(self.COLUMNS["suburb"]),
+            "region": safe_get(self.COLUMNS["region"]),
+            "appointment_set_who": safe_get(self.COLUMNS["appointment_set_who"]),
+            "appointment_confirmed_by": safe_get(self.COLUMNS["appointment_confirmed_by"]),
+            "gross_profit_margin_pct": safe_get(self.COLUMNS["gross_profit_margin_pct"])
         }
 
     async def get_daily_schedule(self, target_date: date) -> Dict:
@@ -298,7 +306,11 @@ class SalesService:
                             "sell_price": 0.0,
                             "appointment_time": "",
                             "project_type": "",
-                            "suburb": ""
+                            "suburb": "",
+                            "region": "",
+                            "appointment_set_who": "",
+                            "appointment_confirmed_by": "",
+                            "gross_profit_margin_pct": ""
                         }
 
                     rep_appointments.append(appointment)
@@ -354,7 +366,7 @@ class SalesService:
         if column.upper() not in self.EDITABLE_COLUMNS:
             return {
                 "success": False,
-                "error": f"Column {column} is not editable. Only F, G, H allowed."
+                "error": f"Column {column} is not editable. Allowed: {', '.join(self.EDITABLE_COLUMNS)}"
             }
 
         try:

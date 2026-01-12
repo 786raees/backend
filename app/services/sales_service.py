@@ -413,7 +413,7 @@ class SalesService:
             spreadsheet_id = self._get_spreadsheet_id()
 
             # Read entire week's data (rows 1-180 covers Mon-Sat with buffer)
-            range_notation = f"'{week_tab}'!A1:M180"
+            range_notation = f"'{week_tab}'!A1:R180"
 
             result = service.spreadsheets().values().get(
                 spreadsheetId=spreadsheet_id,

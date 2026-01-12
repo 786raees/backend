@@ -406,6 +406,163 @@ class SalesService:
                 "error": str(e)
             }
 
+    async def create_appointment(
+        self,
+        week_tab: str,
+        day: str,
+        rep: str,
+        slot: int,
+        client_name: str,
+        suburb: str = "",
+        region: str = "",
+        lead_source: str = "",
+        appointment_time: str = "",
+        project_type: str = ""
+    ) -> Dict:
+        """Create a new appointment in Google Sheets."""
+        # Validate inputs
+        if day not in self.DAYS:
+            return {
+                "success": False,
+                "error": f"Invalid day '{day}'. Must be one of: {', '.join(self.DAYS)}",
+                "error_code": 400
+            }
+
+        if rep not in self.SALES_REPS:
+            return {
+                "success": False,
+                "error": f"Invalid rep '{rep}'. Must be one of: {', '.join(self.SALES_REPS)}",
+                "error_code": 400
+            }
+
+        num_slots = self.SLOTS_PER_DAY.get(day, 5)
+        if slot < 1 or slot > num_slots:
+            return {
+                "success": False,
+                "error": f"Invalid slot {slot}. Must be 1-{num_slots} for {day}",
+                "error_code": 400
+            }
+
+        if not client_name or not client_name.strip():
+            return {
+                "success": False,
+                "error": "Client name is required",
+                "error_code": 400
+            }
+
+        try:
+            service = self._get_service()
+            spreadsheet_id = self._get_spreadsheet_id()
+
+            # Calculate row number
+            row_number = self.calculate_row_number(day, rep, slot)
+
+            # Check if week tab exists
+            available_weeks = await self.get_available_weeks()
+            if week_tab not in available_weeks:
+                return {
+                    "success": False,
+                    "error": f"Week tab '{week_tab}' not found",
+                    "error_code": 404
+                }
+
+            # Optional: Check if slot is already occupied
+            # Read the current row to see if there's already a client name
+            check_range = f"'{week_tab}'!B{row_number}"
+            check_result = service.spreadsheets().values().get(
+                spreadsheetId=spreadsheet_id,
+                range=check_range
+            ).execute()
+
+            existing_values = check_result.get('values', [])
+            if existing_values and len(existing_values) > 0 and len(existing_values[0]) > 0:
+                existing_name = existing_values[0][0]
+                if existing_name and existing_name.strip():
+                    return {
+                        "success": False,
+                        "error": f"Slot is already occupied by '{existing_name}'",
+                        "error_code": 409
+                    }
+
+            # Prepare data to write
+            # Column mapping from COLUMNS constant:
+            # A=slot, B=lead_name, C=lead_source, D=appointment_set, E=appointment_confirmed,
+            # F=appointment_attended, G=job_sold, H=reason, I=conversion,
+            # J=sell_price, K=appointment_time, L=project_type, M=suburb, N=region,
+            # O=appointment_set_who, P=appointment_confirmed_by, Q=gross_profit_margin_pct, R=paid_unpaid
+
+            # We need to write to multiple columns in the same row
+            # Build the values array (columns A through R, though we'll only populate some)
+            row_values = [
+                str(slot),              # A: Slot
+                client_name,            # B: Lead Name
+                lead_source,            # C: Lead Source
+                "Yes" if client_name else "",  # D: Appointment Set
+                "",                     # E: Appointment Confirmed
+                "",                     # F: Appointment Attended (default empty)
+                "",                     # G: Job Sold (default empty)
+                "",                     # H: Reason
+                "",                     # I: Conversion (formula)
+                "",                     # J: Sell Price
+                appointment_time,       # K: Appointment Time
+                project_type,           # L: Project Type
+                suburb,                 # M: Suburb
+                region,                 # N: Region
+                "",                     # O: Appointment Set Who
+                "",                     # P: Appointment Confirmed By
+                "",                     # Q: Gross Profit Margin %
+                ""                      # R: Paid/Unpaid
+            ]
+
+            # Write the entire row
+            range_notation = f"'{week_tab}'!A{row_number}:R{row_number}"
+
+            service.spreadsheets().values().update(
+                spreadsheetId=spreadsheet_id,
+                range=range_notation,
+                valueInputOption="USER_ENTERED",
+                body={"values": [row_values]}
+            ).execute()
+
+            logger.info(f"Created appointment: {week_tab} {day} {rep} Slot {slot} - {client_name}")
+
+            # Return the created appointment
+            appointment = {
+                "slot": slot,
+                "row_number": row_number,
+                "lead_name": client_name,
+                "lead_source": lead_source,
+                "appointment_set": True,
+                "appointment_confirmed": False,
+                "appointment_attended": False,
+                "job_sold": False,
+                "reason": "",
+                "sell_price": 0.0,
+                "appointment_time": appointment_time,
+                "project_type": project_type,
+                "suburb": suburb,
+                "region": region,
+                "appointment_set_who": "",
+                "appointment_confirmed_by": "",
+                "gross_profit_margin_pct": "",
+                "paid_unpaid": ""
+            }
+
+            return {
+                "success": True,
+                "message": "Appointment created successfully",
+                "row_number": row_number,
+                "appointment": appointment
+            }
+
+        except Exception as e:
+            logger.error(f"Error creating appointment: {e}")
+            return {
+                "success": False,
+                "error": str(e),
+                "error_code": 500
+            }
+
     async def get_weekly_stats(self, week_tab: str) -> Dict:
         """Aggregate statistics for an entire week."""
         try:

@@ -36,6 +36,29 @@ class AppointmentUpdateResponse(BaseModel):
     error: Optional[str] = None
 
 
+class AppointmentCreateRequest(BaseModel):
+    """Request body for creating a new appointment."""
+    week_tab: str = Field(..., description="Week tab name, e.g., 'Jan-12'")
+    day: str = Field(..., description="Day of week, e.g., 'Monday', 'Tuesday'")
+    rep: str = Field(..., description="Rep name: 'GLEN', 'GREAT REP', or 'ILAN'")
+    slot: int = Field(..., ge=1, le=5, description="Slot number 1-5")
+    client_name: str = Field(..., min_length=1, description="Client/lead name (required)")
+    suburb: Optional[str] = Field(default="", description="Suburb/location")
+    region: Optional[str] = Field(default="", description="Region")
+    lead_source: Optional[str] = Field(default="", description="Lead source")
+    appointment_time: Optional[str] = Field(default="", description="Appointment time (HH:MM format)")
+    project_type: Optional[str] = Field(default="", description="Project type")
+
+
+class AppointmentCreateResponse(BaseModel):
+    """Response for appointment creation."""
+    success: bool
+    message: Optional[str] = None
+    row_number: Optional[int] = None
+    appointment: Optional[dict] = None
+    error: Optional[str] = None
+
+
 # ============ Endpoints ============
 
 @router.get("/schedule")
@@ -101,6 +124,47 @@ async def update_appointment(request: AppointmentUpdateRequest):
 
     if not result.get("success"):
         raise HTTPException(status_code=400, detail=result.get("error", "Failed to update"))
+
+    return result
+
+
+@router.post("/appointment/create", response_model=AppointmentCreateResponse, status_code=201)
+async def create_appointment(request: AppointmentCreateRequest):
+    """
+    Create a new appointment in an empty slot (Add Booking feature).
+
+    Required fields:
+    - week_tab: Week tab name (e.g., "Jan-12")
+    - day: Day of week ("Monday" through "Saturday")
+    - rep: Rep name ("GLEN", "GREAT REP", or "ILAN")
+    - slot: Slot number (1-5)
+    - client_name: Client/lead name
+
+    Optional fields:
+    - suburb, region, lead_source, appointment_time, project_type
+
+    This endpoint will:
+    1. Validate all required fields
+    2. Calculate the correct row number in Google Sheets
+    3. Write the appointment data to the appropriate columns
+    4. Return the created appointment with row number
+    """
+    result = await sales_service.create_appointment(
+        week_tab=request.week_tab,
+        day=request.day,
+        rep=request.rep,
+        slot=request.slot,
+        client_name=request.client_name,
+        suburb=request.suburb or "",
+        region=request.region or "",
+        lead_source=request.lead_source or "",
+        appointment_time=request.appointment_time or "",
+        project_type=request.project_type or ""
+    )
+
+    if not result.get("success"):
+        error_code = result.get("error_code", 400)
+        raise HTTPException(status_code=error_code, detail=result.get("error", "Failed to create appointment"))
 
     return result
 

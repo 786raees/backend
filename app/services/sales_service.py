@@ -563,6 +563,102 @@ class SalesService:
                 "error_code": 500
             }
 
+    async def delete_appointment(
+        self,
+        week_tab: str,
+        row_number: Optional[int] = None,
+        day: Optional[str] = None,
+        rep: Optional[str] = None,
+        slot: Optional[int] = None
+    ) -> Dict:
+        """
+        Delete an appointment by clearing all data in the row.
+
+        Can specify either:
+        - row_number: Direct row number
+        - day + rep + slot: Calculate row number from these
+
+        This clears all data columns but preserves the row structure.
+        """
+        # Validate inputs
+        if row_number is None:
+            # Must provide day + rep + slot
+            if not day or not rep or slot is None:
+                return {
+                    "success": False,
+                    "error": "Must provide either row_number or (day + rep + slot)",
+                    "error_code": 400
+                }
+
+            # Validate day, rep, slot
+            if day not in self.DAYS:
+                return {
+                    "success": False,
+                    "error": f"Invalid day '{day}'. Must be one of: {', '.join(self.DAYS)}",
+                    "error_code": 400
+                }
+
+            if rep not in self.SALES_REPS:
+                return {
+                    "success": False,
+                    "error": f"Invalid rep '{rep}'. Must be one of: {', '.join(self.SALES_REPS)}",
+                    "error_code": 400
+                }
+
+            num_slots = self.SLOTS_PER_DAY.get(day, 5)
+            if slot < 1 or slot > num_slots:
+                return {
+                    "success": False,
+                    "error": f"Invalid slot {slot}. Must be 1-{num_slots} for {day}",
+                    "error_code": 400
+                }
+
+            # Calculate row number
+            row_number = self.calculate_row_number(day, rep, slot)
+
+        try:
+            service = self._get_service()
+            spreadsheet_id = self._get_spreadsheet_id()
+
+            # Check if week tab exists
+            available_weeks = await self.get_available_weeks()
+            if week_tab not in available_weeks:
+                return {
+                    "success": False,
+                    "error": f"Week tab '{week_tab}' not found",
+                    "error_code": 404
+                }
+
+            # Clear all data columns (B through R)
+            # Column A (Slot) should remain to preserve structure
+            # We'll clear columns B-R (Lead Name through Paid/Unpaid)
+            empty_row = [""] * 17  # 17 empty values for columns B-R
+
+            range_notation = f"'{week_tab}'!B{row_number}:R{row_number}"
+
+            service.spreadsheets().values().update(
+                spreadsheetId=spreadsheet_id,
+                range=range_notation,
+                valueInputOption="USER_ENTERED",
+                body={"values": [empty_row]}
+            ).execute()
+
+            logger.info(f"Deleted appointment at row {row_number} in {week_tab}")
+
+            return {
+                "success": True,
+                "message": "Appointment deleted successfully",
+                "row_number": row_number
+            }
+
+        except Exception as e:
+            logger.error(f"Error deleting appointment: {e}")
+            return {
+                "success": False,
+                "error": str(e),
+                "error_code": 500
+            }
+
     async def get_weekly_stats(self, week_tab: str) -> Dict:
         """Aggregate statistics for an entire week."""
         try:

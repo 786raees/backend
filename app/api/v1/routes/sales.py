@@ -59,6 +59,24 @@ class AppointmentCreateResponse(BaseModel):
     error: Optional[str] = None
 
 
+class AppointmentDeleteRequest(BaseModel):
+    """Request body for deleting an appointment."""
+    week_tab: str = Field(..., description="Week tab name, e.g., 'Jan-12'")
+    row_number: Optional[int] = Field(None, ge=1, description="Row number in sheet (1-indexed)")
+    # Alternative: day + rep + slot
+    day: Optional[str] = Field(None, description="Day of week (if row_number not provided)")
+    rep: Optional[str] = Field(None, description="Rep name (if row_number not provided)")
+    slot: Optional[int] = Field(None, ge=1, le=5, description="Slot number (if row_number not provided)")
+
+
+class AppointmentDeleteResponse(BaseModel):
+    """Response for appointment deletion."""
+    success: bool
+    message: Optional[str] = None
+    row_number: Optional[int] = None
+    error: Optional[str] = None
+
+
 # ============ Endpoints ============
 
 @router.get("/schedule")
@@ -165,6 +183,33 @@ async def create_appointment(request: AppointmentCreateRequest):
     if not result.get("success"):
         error_code = result.get("error_code", 400)
         raise HTTPException(status_code=error_code, detail=result.get("error", "Failed to create appointment"))
+
+    return result
+
+
+@router.post("/appointment/delete", response_model=AppointmentDeleteResponse)
+async def delete_appointment(request: AppointmentDeleteRequest):
+    """
+    Delete an appointment (clear all data in the row).
+
+    Requires either:
+    - row_number: Direct row number in the sheet
+    - OR day + rep + slot: To calculate the row number
+
+    This endpoint clears all appointment data from the row while preserving
+    the row structure. The slot becomes available for new bookings.
+    """
+    result = await sales_service.delete_appointment(
+        week_tab=request.week_tab,
+        row_number=request.row_number,
+        day=request.day,
+        rep=request.rep,
+        slot=request.slot
+    )
+
+    if not result.get("success"):
+        error_code = result.get("error_code", 400)
+        raise HTTPException(status_code=error_code, detail=result.get("error", "Failed to delete appointment"))
 
     return result
 

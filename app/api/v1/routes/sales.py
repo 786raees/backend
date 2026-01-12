@@ -25,7 +25,7 @@ class AppointmentUpdateRequest(BaseModel):
     """Request body for updating an appointment field."""
     week_tab: str = Field(..., description="Week tab name, e.g., 'Jan-05'")
     row_number: int = Field(..., ge=1, description="Row number in sheet (1-indexed)")
-    column: str = Field(..., pattern="^[CFGHJKLMNOPQ]$", description="Column letter (C, F, G, H, J, K, L, M, N, O, P, or Q)")
+    column: str = Field(..., pattern="^[CFGHJKLMNOPQR]$", description="Column letter (C, F, G, H, J, K, L, M, N, O, P, Q, or R)")
     value: str = Field(..., description="Value to set (e.g., 'Yes', '', reason text, price, time, or project type)")
 
 
@@ -90,6 +90,7 @@ async def update_appointment(request: AppointmentUpdateRequest):
     - O (Appointment Set Who): Staff name
     - P (Appointment Confirmed By): Staff name
     - Q (Gross Profit Margin %): Percentage value
+    - R (Paid/Unpaid): Payment status
     """
     result = await sales_service.update_appointment_field(
         week_tab=request.week_tab,

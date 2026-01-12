@@ -76,14 +76,15 @@ class SalesService:
         "appointment_time": 10,  # K - Appointment Time
         "project_type": 11,      # L - Project Type
         "suburb": 12,            # M - Suburb
-        "region": 13,            # N - Region (NEW)
-        "appointment_set_who": 14,      # O - Appointment Set Who (NEW)
-        "appointment_confirmed_by": 15,  # P - Appointment Confirmed By (NEW)
-        "gross_profit_margin_pct": 16    # Q - Gross Profit Margin % (NEW)
+        "region": 13,            # N - Region
+        "appointment_set_who": 14,      # O - Appointment Set Who
+        "appointment_confirmed_by": 15,  # P - Appointment Confirmed By
+        "gross_profit_margin_pct": 16,   # Q - Gross Profit Margin %
+        "paid_unpaid": 17                # R - Paid/Unpaid
     }
 
     # Editable columns (letter format)
-    EDITABLE_COLUMNS = ["C", "F", "G", "H", "J", "K", "L", "M", "N", "O", "P", "Q"]
+    EDITABLE_COLUMNS = ["C", "F", "G", "H", "J", "K", "L", "M", "N", "O", "P", "Q", "R"]
 
     # Project type options
     PROJECT_TYPES = ["Turf Project", "Synthetic Turf Project", "Turf and Landscape project", "New Build Landscape Project"]
@@ -220,7 +221,8 @@ class SalesService:
             "region": safe_get(self.COLUMNS["region"]),
             "appointment_set_who": safe_get(self.COLUMNS["appointment_set_who"]),
             "appointment_confirmed_by": safe_get(self.COLUMNS["appointment_confirmed_by"]),
-            "gross_profit_margin_pct": safe_get(self.COLUMNS["gross_profit_margin_pct"])
+            "gross_profit_margin_pct": safe_get(self.COLUMNS["gross_profit_margin_pct"]),
+            "paid_unpaid": safe_get(self.COLUMNS["paid_unpaid"])
         }
 
     async def get_daily_schedule(self, target_date: date) -> Dict:
@@ -310,7 +312,8 @@ class SalesService:
                             "region": "",
                             "appointment_set_who": "",
                             "appointment_confirmed_by": "",
-                            "gross_profit_margin_pct": ""
+                            "gross_profit_margin_pct": "",
+                            "paid_unpaid": ""
                         }
 
                     rep_appointments.append(appointment)

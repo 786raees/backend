@@ -3,6 +3,7 @@ import logging
 from typing import Optional
 
 from fastapi import APIRouter, HTTPException, Query
+from pydantic import BaseModel, Field
 
 from app.config import settings
 from app.models.schedule import ScheduleResponse
@@ -10,11 +11,67 @@ from app.services.mock_data import generate_mock_schedule
 from app.services.onedrive_service import onedrive_service
 from app.services.google_sheets_service import google_sheets_service
 from app.services.schedule_builder import schedule_builder
+from app.services.turf_delivery_service import turf_delivery_service
 from app.services.graph.exceptions import GraphAPIError
 from app.services.google.exceptions import GoogleSheetsError
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
+
+
+# ============ Request/Response Models for Delivery Management ============
+
+class DeliveryUpdateRequest(BaseModel):
+    """Request body for updating a delivery field."""
+    week_tab: str = Field(..., description="Week tab name, e.g., 'Jan-05'")
+    row_number: int = Field(..., ge=1, description="Row number in sheet (1-indexed)")
+    column: str = Field(..., pattern="^[BCDEP]$", description="Column letter (B, C, D, E, or P)")
+    value: str = Field(..., description="Value to set")
+
+
+class DeliveryUpdateResponse(BaseModel):
+    """Response for delivery update."""
+    success: bool
+    updated: Optional[dict] = None
+    error: Optional[str] = None
+
+
+class DeliveryCreateRequest(BaseModel):
+    """Request body for creating a new delivery."""
+    week_tab: str = Field(..., description="Week tab name, e.g., 'Jan-12'")
+    day: str = Field(..., description="Day of week (Monday-Friday)")
+    truck: str = Field(..., description="Truck name: 'TRUCK 1' or 'TRUCK 2'")
+    slot: int = Field(..., ge=1, le=6, description="Slot number 1-6")
+    variety: Optional[str] = Field(default="", description="Turf variety")
+    suburb: Optional[str] = Field(default="", description="Suburb/location")
+    service_type: Optional[str] = Field(default="", description="Service type (SL/SD/P)")
+    sqm_sold: Optional[str] = Field(default="", description="Square meters sold")
+
+
+class DeliveryCreateResponse(BaseModel):
+    """Response for delivery creation."""
+    success: bool
+    message: Optional[str] = None
+    row_number: Optional[int] = None
+    delivery: Optional[dict] = None
+    error: Optional[str] = None
+
+
+class DeliveryDeleteRequest(BaseModel):
+    """Request body for deleting a delivery."""
+    week_tab: str = Field(..., description="Week tab name, e.g., 'Jan-12'")
+    row_number: Optional[int] = Field(None, ge=1, description="Row number in sheet (1-indexed)")
+    day: Optional[str] = Field(None, description="Day of week (if row_number not provided)")
+    truck: Optional[str] = Field(None, description="Truck name (if row_number not provided)")
+    slot: Optional[int] = Field(None, ge=1, le=6, description="Slot number (if row_number not provided)")
+
+
+class DeliveryDeleteResponse(BaseModel):
+    """Response for delivery deletion."""
+    success: bool
+    message: Optional[str] = None
+    row_number: Optional[int] = None
+    error: Optional[str] = None
 
 
 @router.post("/schedule/refresh")
@@ -151,3 +208,107 @@ async def get_schedule(
             "message": "Neither Google Sheets nor OneDrive credentials are configured",
         },
     )
+
+
+# ============ Delivery Management Endpoints ============
+
+@router.post("/delivery/update", response_model=DeliveryUpdateResponse)
+async def update_delivery(request: DeliveryUpdateRequest):
+    """
+    Update a single field in a delivery row.
+
+    Editable columns:
+    - B (Variety): Turf variety name
+    - C (Suburb): Suburb/location
+    - D (Service Type): "SL", "SD", or "P"
+    - E (SQM Sold): Square meters value
+    - P (Payment Status): "Unpaid", "Paid", or "Partial"
+    """
+    result = await turf_delivery_service.update_delivery_field(
+        week_tab=request.week_tab,
+        row_number=request.row_number,
+        column=request.column,
+        value=request.value
+    )
+
+    if not result.get("success"):
+        raise HTTPException(status_code=400, detail=result.get("error", "Failed to update"))
+
+    return result
+
+
+@router.post("/delivery/create", response_model=DeliveryCreateResponse, status_code=201)
+async def create_delivery(request: DeliveryCreateRequest):
+    """
+    Create a new delivery in an empty slot.
+
+    Required fields:
+    - week_tab: Week tab name (e.g., "Jan-12")
+    - day: Day of week (Monday-Friday)
+    - truck: Truck name ("TRUCK 1" or "TRUCK 2")
+    - slot: Slot number (1-6)
+
+    Optional fields:
+    - variety, suburb, service_type, sqm_sold
+
+    This endpoint will:
+    1. Validate all required fields
+    2. Calculate the correct row number in Google Sheets
+    3. Write the delivery data to the appropriate columns
+    4. Return the created delivery with row number
+    """
+    result = await turf_delivery_service.create_delivery(
+        week_tab=request.week_tab,
+        day=request.day,
+        truck=request.truck,
+        slot=request.slot,
+        variety=request.variety or "",
+        suburb=request.suburb or "",
+        service_type=request.service_type or "",
+        sqm_sold=request.sqm_sold or ""
+    )
+
+    if not result.get("success"):
+        error_code = result.get("error_code", 400)
+        raise HTTPException(status_code=error_code, detail=result.get("error", "Failed to create delivery"))
+
+    return result
+
+
+@router.post("/delivery/delete", response_model=DeliveryDeleteResponse)
+async def delete_delivery(request: DeliveryDeleteRequest):
+    """
+    Delete a delivery (clear all data in the row).
+
+    Requires either:
+    - row_number: Direct row number in the sheet
+    - OR day + truck + slot: To calculate the row number
+
+    This endpoint clears all delivery data from the row while preserving
+    the row structure. The slot becomes available for new deliveries.
+    """
+    result = await turf_delivery_service.delete_delivery(
+        week_tab=request.week_tab,
+        row_number=request.row_number,
+        day=request.day,
+        truck=request.truck,
+        slot=request.slot
+    )
+
+    if not result.get("success"):
+        error_code = result.get("error_code", 400)
+        raise HTTPException(status_code=error_code, detail=result.get("error", "Failed to delete delivery"))
+
+    return result
+
+
+@router.get("/delivery/weeks")
+async def get_delivery_weeks():
+    """
+    Get list of available week tabs.
+
+    Returns list of week tab names (e.g., ["Jan-05", "Jan-12", "Dec-29"]).
+    Useful for populating week selector dropdowns.
+    """
+    weeks = await turf_delivery_service.get_available_weeks()
+    return {"success": True, "weeks": weeks}

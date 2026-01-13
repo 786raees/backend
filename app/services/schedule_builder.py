@@ -176,18 +176,20 @@ class ScheduleBuilder:
         self,
         deliveries: List[ExcelDeliveryRow],
         capacity: int,
+        truck_name: str,
     ) -> TruckData:
         """Build TruckData from a list of deliveries.
 
         Args:
             deliveries: List of delivery rows for this truck.
             capacity: Truck capacity in SQM.
+            truck_name: Truck identifier ("TRUCK 1" or "TRUCK 2").
 
         Returns:
             TruckData with calculated totals.
         """
-        # Convert ExcelDeliveryRow to Delivery models
-        delivery_models = [d.to_delivery() for d in deliveries]
+        # Convert ExcelDeliveryRow to Delivery models WITH truck context
+        delivery_models = [d.to_delivery(truck=truck_name) for d in deliveries]
 
         sqm_total = sum(d.sqm for d in delivery_models)
         pallet_total = sum(d.pallets for d in delivery_models)
@@ -239,10 +241,12 @@ class ScheduleBuilder:
             t1_data = self._build_truck_data(
                 t1_by_date.get(day_date, []),
                 self.truck1_capacity,
+                "TRUCK 1",
             )
             t2_data = self._build_truck_data(
                 t2_by_date.get(day_date, []),
                 self.truck2_capacity,
+                "TRUCK 2",
             )
 
             day_schedule = DaySchedule(

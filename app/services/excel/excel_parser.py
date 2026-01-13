@@ -8,6 +8,21 @@ from app.models.schedule import Delivery
 
 logger = logging.getLogger(__name__)
 
+# Row structure constants for slot-first weekly sheets
+# These constants match TurfDeliveryService for consistent row number calculation
+DAY_HEADER_ROWS = {
+    "Monday": 1,
+    "Tuesday": 31,
+    "Wednesday": 61,
+    "Thursday": 91,
+    "Friday": 121
+}
+
+TRUCK_SLOT_OFFSETS = {
+    "TRUCK 1": 4,
+    "TRUCK 2": 13
+}
+
 # Column mapping for truck worksheets (0-indexed)
 # Based on the Excel structure defined in the project plan
 TRUCK_COLUMN_MAP = {
@@ -74,8 +89,25 @@ class ExcelDeliveryRow:
             return round(self.sqm_sold * LAYING_COST_PER_SQM, 2)
         return 0.0
 
-    def to_delivery(self) -> Delivery:
-        """Convert to Pydantic Delivery model."""
+    def to_delivery(self, truck: Optional[str] = None) -> Delivery:
+        """Convert to Pydantic Delivery model with optional row_number calculation.
+
+        Args:
+            truck: Truck name ("TRUCK 1" or "TRUCK 2") for row_number calculation
+
+        Returns:
+            Delivery model with slot and row_number if truck context is provided
+        """
+        row_number = None
+
+        # Calculate row_number if we have all required context
+        if truck and self.slot and self.day:
+            if truck in TRUCK_SLOT_OFFSETS and self.day in DAY_HEADER_ROWS:
+                try:
+                    row_number = DAY_HEADER_ROWS[self.day] + TRUCK_SLOT_OFFSETS[truck] + (self.slot - 1)
+                except (KeyError, TypeError) as e:
+                    logger.warning(f"Could not calculate row_number for {self.day}/{truck}/slot {self.slot}: {e}")
+
         return Delivery(
             sqm=self.sqm_sold,
             pallets=self.pallets,
@@ -84,6 +116,8 @@ class ExcelDeliveryRow:
             service_type=self.service_type,
             laying_cost=self.laying_cost,
             payment_status=self.payment_status,
+            slot=self.slot,
+            row_number=row_number,
         )
 
 

@@ -14,6 +14,10 @@ class Delivery(BaseModel):
     laying_cost: float = Field(default=0, ge=0, description="Laying cost ($2.20/SQM for SL only)")
     payment_status: Optional[str] = Field(default=None, description="Payment status: Paid, Payment Pending, Cash")
 
+    # Slot-based UI fields
+    slot: Optional[int] = Field(default=None, ge=1, le=6, description="Slot number (1-6) within the day")
+    row_number: Optional[int] = Field(default=None, ge=1, description="Google Sheets row number (1-indexed)")
+
 
 class TruckData(BaseModel):
     """Per-truck daily data with deliveries and totals."""

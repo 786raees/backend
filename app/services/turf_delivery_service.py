@@ -351,6 +351,15 @@ class TurfDeliveryService:
 
             logger.info(f"Created delivery: {week_tab} {day} {truck} Slot {slot}")
 
+            # Clear cache after successful create
+            try:
+                logger.debug("DEBUG CREATE: Clearing cache after successful create")
+                import app.services.google_sheets_service as gss_module
+                gss_module.google_sheets_service.clear_cache()
+                logger.debug("DEBUG CREATE: Cache cleared successfully")
+            except Exception as cache_error:
+                logger.warning(f"Failed to clear cache after create: {cache_error}")
+
             # Return the created delivery
             delivery = {
                 "slot": slot,

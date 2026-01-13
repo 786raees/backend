@@ -154,13 +154,15 @@ class SalesService:
         return day_base + rep_offset + (slot - 1)
 
     def parse_boolean(self, value: Any) -> bool:
-        """Convert 'Yes'/empty to boolean."""
+        """Convert 'Yes'/'True'/empty to boolean."""
         if value is None:
             return False
         if isinstance(value, bool):
             return value
         if isinstance(value, str):
-            return value.strip().lower() == "yes"
+            cleaned = value.strip().lower()
+            # Accept both "yes" and "true" (for Google Sheets checkbox/boolean values)
+            return cleaned == "yes" or cleaned == "true"
         return False
 
     def parse_currency(self, value: Any) -> float:
@@ -709,8 +711,12 @@ class SalesService:
                         if row_idx < len(all_rows):
                             row = all_rows[row_idx]
 
-                            def safe_get(idx: int) -> str:
-                                return str(row[idx]) if idx < len(row) and row[idx] else ""
+                            def safe_get(idx: int, default: str = "") -> str:
+                                """Get value from row - consistent with _parse_row_to_appointment."""
+                                if idx < len(row):
+                                    val = row[idx]
+                                    return str(val) if val is not None else default
+                                return default
 
                             is_set = self.parse_boolean(safe_get(self.COLUMNS["appointment_set"]))
                             is_confirmed = self.parse_boolean(safe_get(self.COLUMNS["appointment_confirmed"]))

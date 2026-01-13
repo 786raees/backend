@@ -25,7 +25,7 @@ class DeliveryUpdateRequest(BaseModel):
     """Request body for updating a delivery field."""
     week_tab: str = Field(..., description="Week tab name, e.g., 'Jan-05'")
     row_number: int = Field(..., ge=1, description="Row number in sheet (1-indexed)")
-    column: str = Field(..., pattern="^[BCDEP]$", description="Column letter (B, C, D, E, or P)")
+    column: str = Field(..., pattern="^[BCDEIJP]$", description="Column letter (B, C, D, E, I, J, or P)")
     value: str = Field(..., description="Value to set")
 
 
@@ -46,6 +46,8 @@ class DeliveryCreateRequest(BaseModel):
     suburb: Optional[str] = Field(default="", description="Suburb/location")
     service_type: Optional[str] = Field(default="", description="Service type (SL/SD/P)")
     sqm_sold: Optional[str] = Field(default="", description="Square meters sold")
+    delivery_fee: Optional[str] = Field(default="", description="Delivery fee")
+    laying_fee: Optional[str] = Field(default="", description="Laying fee")
 
 
 class DeliveryCreateResponse(BaseModel):
@@ -265,7 +267,9 @@ async def create_delivery(request: DeliveryCreateRequest):
         variety=request.variety or "",
         suburb=request.suburb or "",
         service_type=request.service_type or "",
-        sqm_sold=request.sqm_sold or ""
+        sqm_sold=request.sqm_sold or "",
+        delivery_fee=request.delivery_fee or "",
+        laying_fee=request.laying_fee or ""
     )
 
     if not result.get("success"):

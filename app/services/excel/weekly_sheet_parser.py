@@ -287,6 +287,10 @@ class WeeklySheetParser:
                     service_type = cls._safe_str(row[3] if len(row) > 3 else None).upper()
                     sqm_sold = cls._safe_float(row[4] if len(row) > 4 else None)
                     pallets = cls._safe_float(row[5] if len(row) > 5 else None)
+                    # Column I (index 8) = Delivery Fee
+                    delivery_fee = cls._safe_float(row[8] if len(row) > 8 else None, default=0)
+                    # Column J (index 9) = Laying Fee
+                    laying_fee = cls._safe_float(row[9] if len(row) > 9 else None, default=0)
                     # Column P (index 15) = Payment Status
                     payment_status = cls._safe_str(row[15] if len(row) > 15 else None) or None
 
@@ -306,6 +310,8 @@ class WeeklySheetParser:
                         service_type=service_type,
                         sqm_sold=sqm_sold,
                         pallets=pallets,
+                        delivery_fee=delivery_fee,
+                        laying_fee=laying_fee,
                         payment_status=payment_status,
                     )
                     result[current_truck].append(delivery)
@@ -365,6 +371,10 @@ class WeeklySheetParser:
                     service_type = cls._safe_str(row[3] if len(row) > 3 else None).upper()
                     sqm_sold = cls._safe_float(row[4] if len(row) > 4 else None)
                     pallets = cls._safe_float(row[5] if len(row) > 5 else None)
+                    # Column I (index 8) = Delivery Fee
+                    delivery_fee = cls._safe_float(row[8] if len(row) > 8 else None, default=0)
+                    # Column J (index 9) = Laying Fee
+                    laying_fee = cls._safe_float(row[9] if len(row) > 9 else None, default=0)
                     # Column P (index 15) = Payment Status
                     payment_status = cls._safe_str(row[15] if len(row) > 15 else None) or None
 
@@ -390,6 +400,8 @@ class WeeklySheetParser:
                         service_type=service_type,
                         sqm_sold=sqm_sold,
                         pallets=pallets,
+                        delivery_fee=delivery_fee,
+                        laying_fee=laying_fee,
                         payment_status=payment_status,
                     )
                     result[current_truck].append(delivery)

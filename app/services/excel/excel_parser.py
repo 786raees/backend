@@ -10,17 +10,21 @@ logger = logging.getLogger(__name__)
 
 # Row structure constants for slot-first weekly sheets
 # These constants match TurfDeliveryService for consistent row number calculation
+# Each day section = 23 rows:
+#   Day header (1) + empty (1) + TRUCK 1 header (1) + column headers (1) +
+#   6 slots + totals (1) + empty (1) + TRUCK 2 header (1) + column headers (1) +
+#   6 slots + totals (1) + separator (1) = 23 rows
 DAY_HEADER_ROWS = {
     "Monday": 1,
-    "Tuesday": 31,
-    "Wednesday": 61,
-    "Thursday": 91,
-    "Friday": 121
+    "Tuesday": 24,      # 1 + 23
+    "Wednesday": 47,    # 24 + 23
+    "Thursday": 70,     # 47 + 23
+    "Friday": 93        # 70 + 23
 }
 
 TRUCK_SLOT_OFFSETS = {
-    "TRUCK 1": 4,
-    "TRUCK 2": 13
+    "TRUCK 1": 4,       # First truck starts at day_row + 4
+    "TRUCK 2": 14       # Second truck starts at day_row + 14
 }
 
 # Column mapping for truck worksheets (0-indexed)
@@ -60,6 +64,8 @@ class ExcelDeliveryRow:
     service_type: str           # "SL", "SD", "P"
     sqm_sold: float             # e.g., 100.0
     pallets: float              # e.g., 2.0
+    delivery_fee: float = 0     # Delivery fee (column I)
+    laying_fee: float = 0       # Laying fee charged to customer (column J)
     week_start_date: Optional[date] = None  # Monday of the week this delivery belongs to
     payment_status: Optional[str] = None    # "Paid", "Payment Pending", "Cash"
 
@@ -115,6 +121,8 @@ class ExcelDeliveryRow:
             suburb=self.suburb,
             service_type=self.service_type,
             laying_cost=self.laying_cost,
+            delivery_fee=self.delivery_fee,
+            laying_fee=self.laying_fee,
             payment_status=self.payment_status,
             slot=self.slot,
             row_number=row_number,

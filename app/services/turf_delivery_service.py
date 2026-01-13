@@ -36,19 +36,22 @@ class TurfDeliveryService:
     PAYMENT_STATUSES = ["Unpaid", "Paid", "Partial"]
 
     # Row structure constants for slot-first weekly sheets
-    # Each day has 2 trucks, each truck has 6 slots
+    # Each day section = 23 rows:
+    #   Day header (1) + empty (1) + TRUCK 1 header (1) + column headers (1) +
+    #   6 slots + totals (1) + empty (1) + TRUCK 2 header (1) + column headers (1) +
+    #   6 slots + totals (1) + separator (1) = 23 rows
     DAY_HEADER_ROWS = {
         "Monday": 1,
-        "Tuesday": 31,      # Monday (1) + header (2) + truck1 (6) + totals (2) + truck2 (6) + totals (2) + separator (1) = 20 rows
-        "Wednesday": 61,
-        "Thursday": 91,
-        "Friday": 121
+        "Tuesday": 24,      # 1 + 23
+        "Wednesday": 47,    # 24 + 23
+        "Thursday": 70,     # 47 + 23
+        "Friday": 93        # 70 + 23
     }
 
     # Truck offsets within each day
     TRUCK_SLOT_OFFSETS = {
-        "TRUCK 1": 4,       # First truck starts at day_row + 4
-        "TRUCK 2": 13       # Second truck starts at day_row + 13
+        "TRUCK 1": 4,       # First truck starts at day_row + 4 (header + empty + truck header + column headers)
+        "TRUCK 2": 14       # Second truck starts at day_row + 14 (after truck1 slots + totals + empty + truck2 header + column headers)
     }
 
     SLOTS_PER_TRUCK = 6
@@ -74,25 +77,29 @@ class TurfDeliveryService:
     }
 
     # Editable columns (letter format)
-    EDITABLE_COLUMNS = ["B", "C", "D", "E", "P"]  # Variety, Suburb, Service Type, SQM, Payment Status
+    EDITABLE_COLUMNS = ["B", "C", "D", "E", "I", "J", "P"]  # Variety, Suburb, Service Type, SQM, Delivery Fee, Laying Fee, Payment Status
 
     def __init__(self):
         self._client: Optional[GoogleSheetsClient] = None
         self._service = None
-        self._spreadsheet_id = settings.spreadsheet_id if hasattr(settings, 'spreadsheet_id') else None
+        self._spreadsheet_id = settings.google_spreadsheet_id if hasattr(settings, 'google_spreadsheet_id') else None
 
     def _get_service(self):
         """Lazy initialization of sheets service."""
         if self._service is None:
             if self._client is None:
+                print(f"DEBUG: Creating new GoogleSheetsClient")
                 self._client = GoogleSheetsClient()
-            self._service = self._client.get_service()
+                print(f"DEBUG: Client created, type={type(self._client)}, methods={dir(self._client)}")
+            print(f"DEBUG: Calling _ensure_service on client")
+            self._service = self._client._ensure_service()
+            print(f"DEBUG: Service created successfully")
         return self._service
 
     def _get_spreadsheet_id(self):
         """Get the turf supply spreadsheet ID."""
         if self._spreadsheet_id is None:
-            self._spreadsheet_id = settings.spreadsheet_id
+            self._spreadsheet_id = settings.google_spreadsheet_id
         return self._spreadsheet_id
 
     def get_week_tab_name(self, target_date: date) -> str:
@@ -188,6 +195,9 @@ class TurfDeliveryService:
             service = self._get_service()
             spreadsheet_id = self._get_spreadsheet_id()
 
+            print(f"DEBUG UPDATE: week_tab={week_tab}, row={row_number}, column={column}, value={value}")
+            print(f"DEBUG UPDATE: spreadsheet_id={spreadsheet_id}")
+
             # Check if week tab exists
             available_weeks = await self.get_available_weeks()
             if week_tab not in available_weeks:
@@ -199,15 +209,26 @@ class TurfDeliveryService:
 
             # Update the cell
             range_notation = f"'{week_tab}'!{column}{row_number}"
+            print(f"DEBUG UPDATE: range_notation={range_notation}")
 
-            service.spreadsheets().values().update(
+            result = service.spreadsheets().values().update(
                 spreadsheetId=spreadsheet_id,
                 range=range_notation,
                 valueInputOption="USER_ENTERED",
                 body={"values": [[value]]}
             ).execute()
 
+            print(f"DEBUG UPDATE: Google Sheets API response={result}")
             logger.info(f"Updated {week_tab}!{column}{row_number} = {value}")
+
+            # Clear cache so next read gets fresh data
+            print(f"DEBUG UPDATE: Clearing cache after successful update")
+            try:
+                import app.services.google_sheets_service as gss_module
+                gss_module.google_sheets_service.clear_cache()
+                print(f"DEBUG UPDATE: Cache cleared successfully")
+            except Exception as cache_error:
+                print(f"DEBUG UPDATE: Error clearing cache: {cache_error}")
 
             return {
                 "success": True,
@@ -236,7 +257,9 @@ class TurfDeliveryService:
         variety: str = "",
         suburb: str = "",
         service_type: str = "",
-        sqm_sold: str = ""
+        sqm_sold: str = "",
+        delivery_fee: str = "",
+        laying_fee: str = ""
     ) -> Dict:
         """Create a new delivery in an empty slot."""
         # Validate inputs
@@ -295,18 +318,17 @@ class TurfDeliveryService:
                     }
 
             # Prepare data to write
-            # Columns: A=slot, B=variety, C=suburb, D=service_type, E=sqm_sold, F-O=formulas, P=payment_status
+            # Columns: A=slot, B=variety, C=suburb, D=service_type, E=sqm_sold, F-H=formulas, I=delivery_fee, J=laying_fee, K-O=formulas, P=payment_status
             row_values = [
                 str(slot),          # A: Slot
                 variety,            # B: Variety
                 suburb,             # C: Suburb
                 service_type,       # D: Service Type
                 sqm_sold,           # E: SQM Sold
-                # F-O are formulas (pallets, pricing, etc.) - don't overwrite
-                # P: Payment Status - default empty
+                # F-H are formulas (pallets, pricing) - don't overwrite
             ]
 
-            # Write only columns A-E to avoid overwriting formulas
+            # Write columns A-E first
             range_notation = f"'{week_tab}'!A{row_number}:E{row_number}"
 
             service.spreadsheets().values().update(
@@ -315,6 +337,17 @@ class TurfDeliveryService:
                 valueInputOption="USER_ENTERED",
                 body={"values": [row_values]}
             ).execute()
+
+            # Write delivery_fee and laying_fee (columns I and J) if provided
+            if delivery_fee or laying_fee:
+                fee_range = f"'{week_tab}'!I{row_number}:J{row_number}"
+                fee_values = [[delivery_fee or "", laying_fee or ""]]
+                service.spreadsheets().values().update(
+                    spreadsheetId=spreadsheet_id,
+                    range=fee_range,
+                    valueInputOption="USER_ENTERED",
+                    body={"values": fee_values}
+                ).execute()
 
             logger.info(f"Created delivery: {week_tab} {day} {truck} Slot {slot}")
 
@@ -326,6 +359,8 @@ class TurfDeliveryService:
                 "suburb": suburb,
                 "service_type": service_type,
                 "sqm_sold": sqm_sold,
+                "delivery_fee": delivery_fee,
+                "laying_fee": laying_fee,
                 "payment_status": ""
             }
 
@@ -405,14 +440,27 @@ class TurfDeliveryService:
 
             range_notation = f"'{week_tab}'!B{row_number}:P{row_number}"
 
-            service.spreadsheets().values().update(
+            logger.debug(f"DEBUG DELETE: week_tab={week_tab}, row={row_number}")
+            logger.debug(f"DEBUG DELETE: range_notation={range_notation}")
+
+            result = service.spreadsheets().values().update(
                 spreadsheetId=spreadsheet_id,
                 range=range_notation,
                 valueInputOption="USER_ENTERED",
                 body={"values": [empty_row]}
             ).execute()
 
+            logger.debug(f"DEBUG DELETE: Google Sheets API response={result}")
             logger.info(f"Deleted delivery at row {row_number} in {week_tab}")
+
+            # Clear cache after successful delete
+            try:
+                logger.debug("DEBUG DELETE: Clearing cache after successful delete")
+                import app.services.google_sheets_service as gss_module
+                gss_module.google_sheets_service.clear_cache()
+                logger.debug("DEBUG DELETE: Cache cleared successfully")
+            except Exception as cache_error:
+                logger.warning(f"Failed to clear cache after delete: {cache_error}")
 
             return {
                 "success": True,

@@ -194,6 +194,8 @@ class ScheduleBuilder:
         sqm_total = sum(d.sqm for d in delivery_models)
         pallet_total = sum(d.pallets for d in delivery_models)
         laying_cost_total = sum(d.laying_cost for d in delivery_models)
+        delivery_fee_total = sum(d.delivery_fee for d in delivery_models)
+        laying_fee_total = sum(d.laying_fee for d in delivery_models)
         available_sqm = capacity - sqm_total  # Can be negative for overflow
 
         return TruckData(
@@ -201,6 +203,8 @@ class ScheduleBuilder:
             sqm_total=round(sqm_total, 2),
             pallet_total=round(pallet_total, 2),
             laying_cost_total=round(laying_cost_total, 2),
+            delivery_fee_total=round(delivery_fee_total, 2),
+            laying_fee_total=round(laying_fee_total, 2),
             capacity=capacity,
             available_sqm=round(available_sqm, 2),
         )
@@ -252,6 +256,7 @@ class ScheduleBuilder:
             day_schedule = DaySchedule(
                 date=day_date,
                 day_name=format_display_date(day_date),
+                day_of_week=day_date.strftime('%A'),
                 is_week_two=is_week_two,
                 truck1=t1_data,
                 truck2=t2_data,

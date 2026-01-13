@@ -485,6 +485,151 @@ class TurfDeliveryService:
                 "error_code": 500
             }
 
+    async def move_delivery(
+        self,
+        week_tab: str,
+        from_row: int,
+        to_day: str,
+        to_truck: str,
+        to_slot: int
+    ) -> Dict:
+        """Move a delivery from one location to another."""
+        # Validate inputs
+        if to_day not in self.DAYS:
+            return {
+                "success": False,
+                "error": f"Invalid day '{to_day}'. Must be one of: {', '.join(self.DAYS)}",
+                "error_code": 400
+            }
+
+        if to_truck not in self.TRUCKS:
+            return {
+                "success": False,
+                "error": f"Invalid truck '{to_truck}'. Must be one of: {', '.join(self.TRUCKS)}",
+                "error_code": 400
+            }
+
+        if to_slot < 1 or to_slot > self.SLOTS_PER_TRUCK:
+            return {
+                "success": False,
+                "error": f"Invalid slot {to_slot}. Must be 1-{self.SLOTS_PER_TRUCK}",
+                "error_code": 400
+            }
+
+        try:
+            service = self._get_service()
+            spreadsheet_id = self._get_spreadsheet_id()
+
+            # Calculate destination row number
+            to_row = self.calculate_row_number(to_day, to_truck, to_slot)
+
+            # Check if source and destination are the same
+            if from_row == to_row:
+                return {
+                    "success": False,
+                    "error": "Source and destination are the same",
+                    "error_code": 400
+                }
+
+            # Check if week tab exists
+            available_weeks = await self.get_available_weeks()
+            if week_tab not in available_weeks:
+                return {
+                    "success": False,
+                    "error": f"Week tab '{week_tab}' not found",
+                    "error_code": 404
+                }
+
+            # Check if destination slot is empty
+            dest_range = f"'{week_tab}'!B{to_row}"
+            dest_result = service.spreadsheets().values().get(
+                spreadsheetId=spreadsheet_id,
+                range=dest_range
+            ).execute()
+
+            dest_values = dest_result.get('values', [])
+            if dest_values and len(dest_values) > 0 and len(dest_values[0]) > 0:
+                dest_variety = dest_values[0][0]
+                if dest_variety and dest_variety.strip():
+                    return {
+                        "success": False,
+                        "error": "Destination slot is already occupied",
+                        "error_code": 409
+                    }
+
+            # Read source data (columns B-P: variety through payment_status)
+            source_range = f"'{week_tab}'!B{from_row}:P{from_row}"
+            source_result = service.spreadsheets().values().get(
+                spreadsheetId=spreadsheet_id,
+                range=source_range
+            ).execute()
+
+            source_values = source_result.get('values', [])
+            if not source_values or len(source_values) == 0:
+                return {
+                    "success": False,
+                    "error": "Source slot is empty",
+                    "error_code": 404
+                }
+
+            # Copy source data to destination
+            # Update slot number in column A first
+            slot_range = f"'{week_tab}'!A{to_row}"
+            service.spreadsheets().values().update(
+                spreadsheetId=spreadsheet_id,
+                range=slot_range,
+                valueInputOption="USER_ENTERED",
+                body={"values": [[str(to_slot)]]}
+            ).execute()
+
+            # Copy data columns B-P
+            dest_range = f"'{week_tab}'!B{to_row}:P{to_row}"
+            service.spreadsheets().values().update(
+                spreadsheetId=spreadsheet_id,
+                range=dest_range,
+                valueInputOption="USER_ENTERED",
+                body={"values": source_values}
+            ).execute()
+
+            # Clear source row (columns B-P)
+            empty_row = [""] * 15
+            source_clear_range = f"'{week_tab}'!B{from_row}:P{from_row}"
+            service.spreadsheets().values().update(
+                spreadsheetId=spreadsheet_id,
+                range=source_clear_range,
+                valueInputOption="USER_ENTERED",
+                body={"values": [empty_row]}
+            ).execute()
+
+            logger.info(f"Moved delivery from row {from_row} to row {to_row} ({to_day} {to_truck} Slot {to_slot})")
+
+            # Clear cache after successful move
+            try:
+                logger.debug("DEBUG MOVE: Clearing cache after successful move")
+                import app.services.google_sheets_service as gss_module
+                gss_module.google_sheets_service.clear_cache()
+                logger.debug("DEBUG MOVE: Cache cleared successfully")
+            except Exception as cache_error:
+                logger.warning(f"Failed to clear cache after move: {cache_error}")
+
+            return {
+                "success": True,
+                "message": "Delivery moved successfully",
+                "from_row": from_row,
+                "to_row": to_row,
+                "to_day": to_day,
+                "to_truck": to_truck,
+                "to_slot": to_slot
+            }
+
+        except Exception as e:
+            logger.error(f"Error moving delivery: {e}")
+            return {
+                "success": False,
+                "error": str(e),
+                "error_code": 500
+            }
+
 
 # Singleton instance
 turf_delivery_service = TurfDeliveryService()

@@ -76,6 +76,27 @@ class DeliveryDeleteResponse(BaseModel):
     error: Optional[str] = None
 
 
+class DeliveryMoveRequest(BaseModel):
+    """Request body for moving a delivery to a new day/truck/slot."""
+    week_tab: str = Field(..., description="Week tab name, e.g., 'Jan-12'")
+    from_row: int = Field(..., ge=1, description="Source row number in sheet")
+    to_day: str = Field(..., description="Destination day of week (Monday-Friday)")
+    to_truck: str = Field(..., description="Destination truck: 'TRUCK 1' or 'TRUCK 2'")
+    to_slot: int = Field(..., ge=1, le=6, description="Destination slot number 1-6")
+
+
+class DeliveryMoveResponse(BaseModel):
+    """Response for delivery move."""
+    success: bool
+    message: Optional[str] = None
+    from_row: Optional[int] = None
+    to_row: Optional[int] = None
+    to_day: Optional[str] = None
+    to_truck: Optional[str] = None
+    to_slot: Optional[int] = None
+    error: Optional[str] = None
+
+
 @router.post("/schedule/refresh")
 async def refresh_schedule():
     """Clear the cache and force a fresh fetch of schedule data.
@@ -302,6 +323,34 @@ async def delete_delivery(request: DeliveryDeleteRequest):
     if not result.get("success"):
         error_code = result.get("error_code", 400)
         raise HTTPException(status_code=error_code, detail=result.get("error", "Failed to delete delivery"))
+
+    return result
+
+
+@router.post("/delivery/move", response_model=DeliveryMoveResponse)
+async def move_delivery(request: DeliveryMoveRequest):
+    """
+    Move a delivery from one day/truck/slot to another.
+
+    This endpoint:
+    1. Validates the destination slot is empty
+    2. Copies all delivery data to the new location
+    3. Clears the old location
+    4. Clears cache to reflect changes
+
+    Use this to reschedule deliveries when plans change.
+    """
+    result = await turf_delivery_service.move_delivery(
+        week_tab=request.week_tab,
+        from_row=request.from_row,
+        to_day=request.to_day,
+        to_truck=request.to_truck,
+        to_slot=request.to_slot
+    )
+
+    if not result.get("success"):
+        error_code = result.get("error_code", 400)
+        raise HTTPException(status_code=error_code, detail=result.get("error", "Failed to move delivery"))
 
     return result
 

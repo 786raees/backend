@@ -88,13 +88,16 @@ class TurfDeliveryService:
         """Lazy initialization of sheets service."""
         if self._service is None:
             if self._client is None:
-                print(f"DEBUG: Creating new GoogleSheetsClient")
                 self._client = GoogleSheetsClient()
-                print(f"DEBUG: Client created, type={type(self._client)}, methods={dir(self._client)}")
-            print(f"DEBUG: Calling _ensure_service on client")
             self._service = self._client._ensure_service()
-            print(f"DEBUG: Service created successfully")
         return self._service
+
+    def _reset_service(self):
+        """Reset the cached service to force re-authentication on next call."""
+        self._service = None
+        if self._client is not None:
+            self._client.reset_service()
+        logger.info("TurfDeliveryService: service reset for re-authentication")
 
     def _get_spreadsheet_id(self):
         """Get the turf supply spreadsheet ID."""
@@ -195,9 +198,6 @@ class TurfDeliveryService:
             service = self._get_service()
             spreadsheet_id = self._get_spreadsheet_id()
 
-            print(f"DEBUG UPDATE: week_tab={week_tab}, row={row_number}, column={column}, value={value}")
-            print(f"DEBUG UPDATE: spreadsheet_id={spreadsheet_id}")
-
             # Check if week tab exists
             available_weeks = await self.get_available_weeks()
             if week_tab not in available_weeks:
@@ -209,7 +209,6 @@ class TurfDeliveryService:
 
             # Update the cell
             range_notation = f"'{week_tab}'!{column}{row_number}"
-            print(f"DEBUG UPDATE: range_notation={range_notation}")
 
             result = service.spreadsheets().values().update(
                 spreadsheetId=spreadsheet_id,
@@ -218,17 +217,14 @@ class TurfDeliveryService:
                 body={"values": [[value]]}
             ).execute()
 
-            print(f"DEBUG UPDATE: Google Sheets API response={result}")
             logger.info(f"Updated {week_tab}!{column}{row_number} = {value}")
 
             # Clear cache so next read gets fresh data
-            print(f"DEBUG UPDATE: Clearing cache after successful update")
             try:
                 import app.services.google_sheets_service as gss_module
                 gss_module.google_sheets_service.clear_cache()
-                print(f"DEBUG UPDATE: Cache cleared successfully")
             except Exception as cache_error:
-                print(f"DEBUG UPDATE: Error clearing cache: {cache_error}")
+                logger.warning(f"Error clearing cache: {cache_error}")
 
             return {
                 "success": True,
@@ -242,6 +238,8 @@ class TurfDeliveryService:
 
         except Exception as e:
             logger.error(f"Error updating delivery field: {e}")
+            if "401" in str(e) or "expired" in str(e).lower() or "credentials" in str(e).lower():
+                self._reset_service()
             return {
                 "success": False,
                 "error": str(e),
@@ -382,6 +380,8 @@ class TurfDeliveryService:
 
         except Exception as e:
             logger.error(f"Error creating delivery: {e}")
+            if "401" in str(e) or "expired" in str(e).lower() or "credentials" in str(e).lower():
+                self._reset_service()
             return {
                 "success": False,
                 "error": str(e),
@@ -479,6 +479,8 @@ class TurfDeliveryService:
 
         except Exception as e:
             logger.error(f"Error deleting delivery: {e}")
+            if "401" in str(e) or "expired" in str(e).lower() or "credentials" in str(e).lower():
+                self._reset_service()
             return {
                 "success": False,
                 "error": str(e),
@@ -624,6 +626,8 @@ class TurfDeliveryService:
 
         except Exception as e:
             logger.error(f"Error moving delivery: {e}")
+            if "401" in str(e) or "expired" in str(e).lower() or "credentials" in str(e).lower():
+                self._reset_service()
             return {
                 "success": False,
                 "error": str(e),

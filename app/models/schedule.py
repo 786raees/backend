@@ -39,6 +39,7 @@ class DaySchedule(BaseModel):
     day_name: str = Field(..., description="Formatted day name, e.g., 'Mon 22nd Dec'")
     day_of_week: str = Field(..., description="Day of week name: Monday, Tuesday, etc.")
     is_week_two: bool = Field(default=False, description="Flag for week 2 styling")
+    week_tab: Optional[str] = Field(default=None, description="Google Sheets tab name, e.g., 'Feb-16'")
     truck1: TruckData
     truck2: TruckData
 

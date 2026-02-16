@@ -10,6 +10,13 @@ from app.services.excel.excel_parser import ExcelDeliveryRow
 logger = logging.getLogger(__name__)
 
 
+def get_week_tab_from_date(target_date: date) -> str:
+    """Get the Google Sheets tab name for the week containing target_date.
+    Format: 'Mon-DD' where Mon is 3-letter month and DD is the Monday's day."""
+    monday = target_date - timedelta(days=target_date.weekday())
+    return monday.strftime('%b-%d')
+
+
 def get_ordinal_suffix(day: int) -> str:
     """Get ordinal suffix for a day number (st, nd, rd, th)."""
     if 11 <= day <= 13:
@@ -258,6 +265,7 @@ class ScheduleBuilder:
                 day_name=format_display_date(day_date),
                 day_of_week=day_date.strftime('%A'),
                 is_week_two=is_week_two,
+                week_tab=get_week_tab_from_date(day_date),
                 truck1=t1_data,
                 truck2=t2_data,
             )

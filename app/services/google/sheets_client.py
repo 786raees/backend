@@ -31,6 +31,12 @@ class GoogleSheetsClient:
         self._service = None
         self._credentials = None
 
+    def reset_service(self):
+        """Reset the cached service and credentials, forcing re-authentication on next use."""
+        self._service = None
+        self._credentials = None
+        logger.info("Google Sheets service reset")
+
     def _ensure_service(self):
         """Lazy initialization of Sheets service.
 
